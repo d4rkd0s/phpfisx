@@ -63,15 +63,10 @@ class field {
     }
 
     public function runFisx($step) {
+        // Run physics on each point
         foreach ($this->points as $point) {
-            $new_y = $point->getY() + $this->getGravity() * $step;
-            if($new_y > $this->y_max) {
-                $point->setCoords($point->getX(), $this->getBounds("y", "max") - 4);
-                // $this->setPointVal($point["id"], $point["x"], $this->y_max - 4);
-            } else {
-                $point->setCoords($point->getX(), $new_y);
-                // $this->setPointVal($point["id"], $point["x"], $new_y);
-            }
+            // Gravity
+            $point->applyForce($this->getGravity(), 190);
         }
     }
 
