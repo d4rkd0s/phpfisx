@@ -3,6 +3,20 @@ A basic Physics engine in PHP because why not
 
 ![Simple Points Animated GIF](simple_points.gif)
 
+## Install / Use
+Currently I have my latest "simulation" hard coded into the repo, but its easy to change. Anyways to see/run what I'm currently working on in the engine follow the steps below.
+
+Install php first http://php.net/manual/en/install.php
+
+1. Clone the repo and go into the directory
+`git clone https://github.com/d4rkd0s/phpfisx && cd phpfisx`
+
+2. Run a local webserver with PHP
+`php -S localhost:8000`
+
+3. View in your browser, I use Chrome
+http://localhost:8000/
+
 ### How?
 
 Using PHP, and some simple Object Oriented programming. A re-used random seed is used to calculate based on the current "step", data/points/variables, to produce the resulting math behind some **simple** physics. Visualizing it currently is being done with some iframe.onload and stepping through and requesting PNG images of the current "state" of the simulation. Each state is generated on the fly, and each request to phpfisx returns a single state. In the future I would I plan to "bake" states, so calculations can be ran once, for all states, and then a final Simulation can be played. In some smaller simulations a "live" view is what I'll be trying to achive allowing some simply things to be ran on the fly/adjusted.
