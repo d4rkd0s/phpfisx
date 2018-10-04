@@ -5,6 +5,8 @@ class point {
     public $id;
     public $x;
     public $y;
+    public $z;
+    public $mode;
 
     public function __construct(\phpfisx\areas\field $field, int $seed) {
         $this->id = $this->uuid();
@@ -22,6 +24,10 @@ class point {
     }
 
     public function setVelocity() {
+        
+    }
+
+    public function applyForce() {
         
     }
 

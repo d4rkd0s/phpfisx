@@ -101,6 +101,7 @@ class field {
         $border = 2;
 
         $white = imagecolorallocate($gd, 255, 255, 255);
+        $gray = imagecolorallocate($gd, 245, 245, 245);
         $black = imagecolorallocate($gd, 0, 0, 0);
         $red = imagecolorallocate($gd, 255, 0, 0);
         $blue = imagecolorallocate($gd, 0, 0, 255);
@@ -123,10 +124,10 @@ class field {
 
         
         // Set text background
-        imagefilledrectangle($gd, $border+1, $border+1, round(80+strlen(strval($step))*10), 20, $white);
+        imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($step))), 20, $gray);
 
         // Set details
-        imagestring($gd, 4, 4, 4, 'time ' . $step . '00ms', $black);
+        imagestring($gd, 4, 4, 4, 'time ' . $step, $black);
         
         header('Content-Type: image/png');
         imagepng($gd);
