@@ -5,7 +5,7 @@ A basic Physics engine in PHP because why not
 
 ### How?
 
-Using PHP, and some simple Object Oriented programming. A common rand seed is used, counted steps, and calculations are done on data, to produce the math behind some simple physics. Visualizing it currently is being done with some iframe.onload and stepping through and requesting PNG images of the current "state" of the simulation. Each state is generated on the fly, and each request to phpfisx returns a single state. In the future I would I plan to "bake" states, so calculations can be ran once, for all states, and then a final Simulation can be played. In some smaller simulations a "live" view is what I'll be trying to achive allowing some simply things to be ran on the fly/adjusted.
+Using PHP, and some simple Object Oriented programming. A re-used random seed is used to calculate based on the current "step", data/points/variables, to produce the resulting math behind some **simple** physics. Visualizing it currently is being done with some iframe.onload and stepping through and requesting PNG images of the current "state" of the simulation. Each state is generated on the fly, and each request to phpfisx returns a single state. In the future I would I plan to "bake" states, so calculations can be ran once, for all states, and then a final Simulation can be played. In some smaller simulations a "live" view is what I'll be trying to achive allowing some simply things to be ran on the fly/adjusted.
 
 ### Why?
 
