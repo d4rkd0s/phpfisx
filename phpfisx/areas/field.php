@@ -65,12 +65,15 @@ class field {
     public function runFisx($step) {
         // Run physics on each point
         foreach ($this->points as $point) {
+            // Random Light Force
+            // $point->applyForce(1, round(rand(0,360)), $step, $this);
             // Gravity
-            $point->applyForce($this->getGravity(), 190);
+            $point->applyForce($this->getGravity()*($step*$this->getGravity()), round(0), $step, $this);
         }
     }
 
-    public function debug() {
+    public function debug($step) {
+        $this->runFisx($step);
         echo json_encode(array(
             'type' => 'field',
             'validity' => ($this->valid ? 'valid' : 'invalid'),
