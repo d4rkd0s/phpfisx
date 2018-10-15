@@ -23,7 +23,7 @@ Using PHP, and some simple Object Oriented programming. A re-used random seed is
 
 ### Why?
 
-Theres plenty of complex, overbloated libraries in many languages. Mostly graphics / simulations are ran in compiled languages like C, C++, Java, Golang... etc. But I know what I wanted to achive wasn't overly complex (at least when I started) and PHP is such a friendly language, it's ability to run on the fly without compiling and interoperability with the web. Makes is portable and easy to use, all you need is php (internal web server with `php -S`) and a browser.
+Theres plenty of complex, overbloated libraries in many languages. Most graphics / simulations are ran in compiled languages like C, C++, Java, Golang... etc. But I know what I wanted to achieve wasn't overly complex (at least when I started) and PHP is such a friendly language, it's ability to run on the fly without compiling and interoperability with the web. Makes is portable and easy to use, all you need is php (internal web server with `php -S`) and a browser.
 
 
 ### Planned Features
