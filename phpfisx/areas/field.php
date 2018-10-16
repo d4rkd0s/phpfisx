@@ -13,6 +13,8 @@ class field {
     private $points = array();
     private $gravity;
 
+    private $step;
+
     private $border;
 
     public function __construct($bounds, $num_of_points, $gravity, $border = 4) {
@@ -36,6 +38,10 @@ class field {
 
     private function getGravity() {
         return $this->gravity;
+    }
+
+    public function step(int $step) {
+        $this->step = $step;
     }
 
     public function getBounds($axis, $type) {
@@ -68,19 +74,45 @@ class field {
         }
     }
 
-    public function runFisx($step) {
+    private function applyForces(array $forces) {
         // Run physics on each point
         foreach ($this->points as $point) {
             // Random Light Force
-            // $point->applyForce(1, round(rand(0,360)), $step);
-            $point->applyForce(10, 170, $step);
-            // Gravity
-            // $point->applyForce($this->getGravity()*($step*$this->getGravity()), round(0), $step);
+            foreach($forces as $force) {
+                if(in_array($this->step, $force['steps'])){
+                    $point->applyForce($force['amount'], $force['direction'], $this->step);
+                }
+            }
         }
     }
 
-    public function debug($step) {
-        $this->runFisx($step);
+    private function applyGravity() {
+         foreach ($this->points as $point) {
+            $point->applyForce($this->getGravity()*($this->step*$this->getGravity()), round(0), $this->step);
+        }
+    }
+
+    private function checkCollisions() {
+        return true;
+    }
+
+    public function runFisx() {
+        $forces = array(
+            [
+                "ids"=>"all",
+                "force"=>"linear",
+                "direction"=>170,
+                "amount"=>10,
+                "steps"=>[1,2,3]
+            ]
+        );
+        $this->applyForces($forces);
+        $this->applyGravity();
+        $this->checkCollisions();
+    }
+
+    public function debug() {
+        $this->runFisx();
         echo json_encode(array(
             'type' => 'field',
             'validity' => ($this->valid ? 'valid' : 'invalid'),
@@ -94,8 +126,8 @@ class field {
         ));        
     }
 
-    public function visualize($step) {
-        $this->runFisx($step);
+    public function visualize() {
+        $this->runFisx();
 
         $gd = imagecreatetruecolor($this->x_max, $this->y_max);
 
@@ -125,10 +157,10 @@ class field {
 
         
         // Set text background
-        imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($step))), 20, $gray);
+        imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($this->step))), 20, $gray);
 
         // Set details
-        imagestring($gd, 4, 4, 4, 'time ' . $step, $black);
+        imagestring($gd, 4, 4, 4, 'time ' . $this->step, $black);
         
         header('Content-Type: image/png');
         imagepng($gd);
