@@ -4,7 +4,6 @@ namespace phpfisx\areas;
 use \phpfisx\entities\point as point;
 
 class field {
-
     private $x_min = 0;
     private $x_max = 0;
     private $y_min = 0;
@@ -14,14 +13,21 @@ class field {
     private $points = array();
     private $gravity;
 
-    public function __construct($bounds, $num_of_points, $gravity) {
+    private $border;
+
+    public function __construct($bounds, $num_of_points, $gravity, $border = 4) {
         $this->x_min = $bounds[0];
         $this->x_max = $bounds[1];
         $this->y_min = $bounds[2];
         $this->y_max = $bounds[3];
+        $this->border = $border;
         $this->ensureFieldSpace();
         $this->generatePoints($num_of_points);
         $this->setGravity($gravity);
+    }
+
+    public function getBorder() {
+        return $this->border;
     }
 
     private function setGravity($gravity) {
@@ -66,9 +72,10 @@ class field {
         // Run physics on each point
         foreach ($this->points as $point) {
             // Random Light Force
-            // $point->applyForce(1, round(rand(0,360)), $step, $this);
+            // $point->applyForce(1, round(rand(0,360)), $step);
+            $point->applyForce(10, 170, $step);
             // Gravity
-            $point->applyForce($this->getGravity()*($step*$this->getGravity()), round(0), $step, $this);
+            // $point->applyForce($this->getGravity()*($step*$this->getGravity()), round(0), $step);
         }
     }
 
@@ -88,10 +95,6 @@ class field {
     }
 
     public function visualize($step) {
-        // for ($i=0; $i < $step; $i++) { 
-        //     $this->applyGravity(100 * $step);
-        // }
-
         $this->runFisx($step);
 
         $gd = imagecreatetruecolor($this->x_max, $this->y_max);

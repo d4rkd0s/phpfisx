@@ -30,7 +30,15 @@ class point {
         
     }
 
-    public function applyForce($amount, $direction, $step) {
+    /**
+     * applyForce - Applies force to the point
+     *
+     * @param integer $amount - Any number, indicates the "amount" of force to apply, no units yet
+     * @param integer $direction - Direction from 0-360 to apply the force from
+     * @param integer $step - The current fisx step
+     * @return void
+     */
+    public function applyForce(int $amount, int $direction, int $step) {
         $new_x = $this->getX();
         $new_y = $this->getY();
         for ($i=0; $i < $step; $i++) { 
@@ -46,37 +54,27 @@ class point {
             $final_x = $new_x;
             $final_y = $new_y;
             // Set border
-            $border = 4;
             // if x is pos out of bounds, limit x to max bounds
             if($new_x > $this->field->getBounds("x", "max")) {
-                $final_x = $this->field->getBounds("x", "max") - $border;
+                $final_x = $this->field->getBounds("x", "max") - $this->field->getBorder();
             }
             // if y is pos out of bounds, limit y to max bounds
             if($new_y > $this->field->getBounds("y", "max")) {
-                $final_y = $this->field->getBounds("y", "max") - $border;
+                $final_y = $this->field->getBounds("y", "max") - $this->field->getBorder();
             }
             // if x is neg out of bounds, limit x to min bounds
             if($new_x < $this->field->getBounds("x", "min")) {
-                $final_x = $this->field->getBounds("x", "min") + $border;
+                $final_x = $this->field->getBounds("x", "min") + $this->field->getBorder();
             }
             // if y is neg out of bounds, limit y to min bounds
             if($new_y < $this->field->getBounds("y", "min")) {
-                $final_y = $this->field->getBounds("y", "min") + $border;
+                $final_y = $this->field->getBounds("y", "min") + $this->field->getBorder();
             }
             // Set new position of point
             $this->setCoords($final_x, $final_y);
         } else {
             throw new \Exception("Invalid vector movement");
         }
-        
-        // $new_y = $point->getY() + $this->getGravity() * $step;
-        // if($new_y > $this->y_max) {
-        //     $point->setCoords($point->getX(), $this->getBounds("y", "max") - 4);
-        //     // $this->setPointVal($point["id"], $point["x"], $this->y_max - 4);
-        // } else {
-        //     $point->setCoords($point->getX(), $new_y);
-        //     // $this->setPointVal($point["id"], $point["x"], $new_y);
-        // }
     }
 
     public function setCoords($x, $y) {
