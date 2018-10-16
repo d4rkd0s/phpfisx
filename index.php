@@ -14,7 +14,7 @@ iframe {
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     var i = 1;
-    var num_of_steps = 25;
+    var num_of_steps = 2;
     document.getElementById('system').onload= function() {
         if(i < num_of_steps) {
             i++;

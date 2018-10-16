@@ -8,14 +8,18 @@ class point {
     public $z;
     private $field;
 
-    public function __construct(\phpfisx\areas\field $field, int $seed) {
+    public function __construct(\phpfisx\areas\field $field, int $seed = 0, int $existing_x = 0, int $existing_y = 0) {
         $this->id = $this->uuid();
         $this->field = $field;
-        srand($seed);
-        $this->setCoords(
-            rand($this->field->getBounds('x', 'min'), $this->field->getBounds('x', 'max')),
-            rand($this->field->getBounds('y', 'min'), $this->field->getBounds('y', 'max'))
-        );
+        if($existing_x === INF && $existing_y === INF) {
+            srand($seed);
+            $this->setCoords(
+                rand($this->field->getBounds('x', 'min'), $this->field->getBounds('x', 'max')),
+                rand($this->field->getBounds('y', 'min'), $this->field->getBounds('y', 'max'))
+            );
+        } else {
+            $this->setCoords($existing_x, $existing_y);
+        }
     }
 
     private function uuid() {
@@ -45,11 +49,8 @@ class point {
             // Calculate X,Y from Cos/Sin
             $new_x = $new_x + ($amount * (sin(deg2rad($direction))));
             $new_y = $new_y + ($amount * (cos(deg2rad($direction))));
-        }
-        // Calculate distance between start/end for sanity check
-        $distance = sqrt(pow($new_x - $this->getX(), 2) + pow($new_y - $this->getY(), 2));
-        // Check distance traveled matches distance requested
-        if (round($distance, 2) === round($amount * $step, 2)) {
+            // Calculate distance between start/end for sanity check
+            $distance = sqrt(pow($new_x - $this->getX(), 2) + pow($new_y - $this->getY(), 2));
             // Set end states
             $final_x = $new_x;
             $final_y = $new_y;
@@ -70,11 +71,15 @@ class point {
             if($new_y < $this->field->getBounds("y", "min")) {
                 $final_y = $this->field->getBounds("y", "min") + $this->field->getBorder();
             }
+        }
+        // Check distance traveled matches distance requested
+        if (round($distance, 2) === round($amount * $step, 2)) {
             // Set new position of point
             $this->setCoords($final_x, $final_y);
         } else {
             throw new \Exception("Invalid vector movement");
         }
+        
     }
 
     public function setCoords($x, $y) {

@@ -17,14 +17,15 @@ class field {
 
     private $border;
 
-    public function __construct($bounds, $num_of_points, $gravity, $border = 4) {
+    private $pointCount;
+
+    public function __construct($bounds, $gravity = 9.86, $border = 4) {
         $this->x_min = $bounds[0];
         $this->x_max = $bounds[1];
         $this->y_min = $bounds[2];
         $this->y_max = $bounds[3];
         $this->border = $border;
         $this->ensureFieldSpace();
-        $this->generatePoints($num_of_points);
         $this->setGravity($gravity);
     }
 
@@ -36,12 +37,25 @@ class field {
         $this->gravity = $gravity;
     }
 
+    public function desiredPointCount(int $num) {
+        $this->pointCount = $num;
+    }
+
     private function getGravity() {
         return $this->gravity;
     }
 
-    public function step(int $step) {
+    public function setStep(int $step) {
         $this->step = $step;
+    }
+
+    public function getStep() {
+        return $this->step;
+    }
+
+    public function getLastStep() {
+        $disk = json_decode(file_get_contents('field.json'), true);
+        return $disk['step'];
     }
 
     public function getBounds($axis, $type) {
@@ -68,8 +82,8 @@ class field {
         }
     }
 
-    public function generatePoints($num) {
-        for ($i=0; $i < $num; $i++) { 
+    public function generatePoints() {
+        for ($i=0; $i < $this->pointCount; $i++) { 
             $this->points[$i] = new point($this, $i);
         }
     }
@@ -94,6 +108,38 @@ class field {
 
     private function checkCollisions() {
         return true;
+    }
+
+    private function resetDisk() {
+        $fp = fopen('field.json', 'w');
+        fwrite($fp, json_encode(array(
+            "step" => 0,
+            "points" => array()
+        )));
+        fclose($fp);
+    }
+
+    private function persistToDisk() {
+        $fp = fopen('field.json', 'w');
+        fwrite($fp, json_encode(array(
+            "step" => $this->getStep(),
+            "points" => $this->points
+        )));
+        fclose($fp);
+    }
+
+    private function loadFromDisk() {
+        $disk = json_decode(file_get_contents('field.json'), true);
+        $points = array();
+        foreach ($disk['points'] as $raw_point) {
+            array_push($points, new point($this, 0, $raw_point['x'], $raw_point['y']));
+        }
+    }
+
+    private function initDisk() {
+        if(!file_exists('field.json')) {
+            $this->resetDisk();
+        }
     }
 
     public function runFisx() {
@@ -127,7 +173,32 @@ class field {
     }
 
     public function visualize() {
+        // Ensure disk is setup
+        $this->initDisk();
+
+        // if the step is the first step, clear the field, build the points, and run fisx
+        if($this->getStep() === 1) {
+            $this->resetDisk();
+            $this->generatePoints();
+            error_log('step 1, generating points');
+        } 
+        // if the step is n and n-1 = last step, then load points from file
+        else if($this->getStep()-1 === $this->getLastStep()) {
+            $this->loadFromDisk();
+            error_log('valid step, loading points from disk');
+        }
+        // if the step is n and n-1 != last step, then throw exception (request out of sequence)
+        else if($this->getStep()-1 !== $this->getLastStep()) {
+            throw new \Exception('request out of sequence');
+        }
+
+        // Run physics calculations
         $this->runFisx();
+        error_log('fisx ran');
+
+        // Save to disk
+        $this->persistToDisk();
+        error_log('persisted to disk');
 
         $gd = imagecreatetruecolor($this->x_max, $this->y_max);
 
