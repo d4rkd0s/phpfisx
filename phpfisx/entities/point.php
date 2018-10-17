@@ -8,16 +8,17 @@ class point {
     public $z;
     private $field;
 
-    public function __construct(\phpfisx\areas\field $field, int $seed = 0, int $existing_x = 0, int $existing_y = 0) {
-        $this->id = $this->uuid();
+    public function __construct(\phpfisx\areas\field $field, int $seed = 0, string $existing_id = "", int $existing_x = 0, int $existing_y = 0) {
         $this->field = $field;
         if($seed !== 0) {
+            $this->id = $this->uuid();
             srand($seed);
             $this->setCoords(
                 rand($this->field->getBounds('x', 'min'), $this->field->getBounds('x', 'max')),
                 rand($this->field->getBounds('y', 'min'), $this->field->getBounds('y', 'max'))
             );
         } else {
+            $this->id = $existing_id;
             $this->setCoords($existing_x, $existing_y);
         }
     }

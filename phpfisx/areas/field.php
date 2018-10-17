@@ -121,7 +121,6 @@ class field {
 
     private function persistToDisk() {
         $fp = fopen('field.json', 'w');
-        // error_log(print_r($this->points));
         fwrite($fp, json_encode(array(
             "step" => $this->getStep(),
             "points" => $this->points
@@ -133,8 +132,7 @@ class field {
         $disk = json_decode(file_get_contents('field.json'), true);
         $points = array();
         foreach ($disk['points'] as $raw_point) {
-            error_log("Loading point with x: " . $raw_point['x']);
-            array_push($points, new point($this, 0, $raw_point['x'], $raw_point['y']));
+            array_push($points, new point($this, 0, $raw_point['id'], $raw_point['x'], $raw_point['y']));
         }
         $this->points = $points;
     }
@@ -164,18 +162,14 @@ class field {
         // Ensure disk is setup
         $this->initDisk();
 
-
-        error_log("before ifs getstep: " . $this->getStep() . " getlaststep: " . $this->getLastStep());
         // if the step is the first step, clear the field, build the points, and run fisx
         if($this->getStep() === 1) {
             $this->resetDisk();
             $this->generatePoints();
-            error_log('step 1, generating points');
         } 
         // if the step is n and n-1 = last step, then load points from file
         else if($this->getStep()-1 === $this->getLastStep()) {
             $this->loadFromDisk();
-            error_log('valid step, loading points from disk');
         }
         // if the step is n and n-1 != last step, then throw exception (request out of sequence)
         else if($this->getStep()-1 !== $this->getLastStep()) {
@@ -184,11 +178,9 @@ class field {
 
         // Run physics calculations
         $this->runFisx();
-        error_log('fisx ran');
 
         // Save to disk
         $this->persistToDisk();
-        error_log('persisted to disk');
     }
 
     public function visualize() {
@@ -210,12 +202,9 @@ class field {
         // Set background
         imagefilledrectangle($gd, $border, $border, $this->getBounds('x', 'max') - $border*1.5, $this->getBounds('y', 'max') - $border*1.5, $white);
 
-        error_log("IMG points");
         foreach ($this->points as $point) {
-            error_log("Point found ");
             $pointx = round($point->getX());
             $pointy = round($point->getY());
-            error_log("x: " . $pointx . " y:" . $pointy);
             imagesetpixel($gd, $pointx, $pointy-1, $black);
             imagesetpixel($gd, $pointx-1, $pointy, $black);
             imagesetpixel($gd, $pointx, $pointy, $black);
