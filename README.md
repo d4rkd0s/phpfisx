@@ -1,5 +1,8 @@
-# phpfisx
-A basic Physics engine in PHP because why not
+<img src="logo.png" alt="logo" width="200"/>
+
+A physics engine written in PHP
+
+<hr>
 
 ![Simple Points Animated GIF](simple_points.gif)
 
