@@ -36,6 +36,8 @@ Theres plenty of complex, overbloated libraries in many languages. Most graphics
 - [x] 2D Points (Point's live in fields)
 - [x] 2D Visualizer (built in PHP GD Image Library)
 - [x] 2D Gravity
+- [x] 2D Force
+- [ ] 2D Disk Stored States
 - [ ] 2D Mass
 - [ ] 2D Velocity
 - [ ] 2D Lines
