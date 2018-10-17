@@ -126,6 +126,30 @@ class field {
             "points" => $this->points
         )));
         fclose($fp);
+        $this->saveGrafanaDB();
+    }
+
+    private function pointsToXYArray($points) {
+        $set = array();
+        foreach ($points as $point) {
+            array_push($set, $point->getCoords());
+        }
+        return $set;
+    }
+
+    private function saveGrafanaDB() {
+        $fp = fopen('grafana.json', 'w');
+        fwrite($fp, json_encode(array(
+            "columns" => array(
+                array("text" => "x", "type" => "string"),
+                array("text" => "y", "type" => "string")
+            ),
+            "rows" => array(
+                $this->pointsToXYArray($this->points)
+            ),
+            "type" => "table"
+        )));
+        fclose($fp);
     }
 
     private function loadFromDisk() {

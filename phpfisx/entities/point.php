@@ -89,7 +89,7 @@ class point {
     }
 
     public function getCoords() {
-        return arrat($this->x, $this->y);
+        return array($this->x, $this->y);
     }
 
     public function getX() {
