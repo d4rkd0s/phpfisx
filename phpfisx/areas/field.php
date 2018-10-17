@@ -19,7 +19,7 @@ class field {
 
     private $pointCount;
 
-    public function __construct($bounds, $gravity = 9.86, $border = 4) {
+    public function __construct($bounds, $gravity = 1, $border = 4) {
         $this->x_min = $bounds[0];
         $this->x_max = $bounds[1];
         $this->y_min = $bounds[2];
@@ -121,6 +121,7 @@ class field {
 
     private function persistToDisk() {
         $fp = fopen('field.json', 'w');
+        // error_log(print_r($this->points));
         fwrite($fp, json_encode(array(
             "step" => $this->getStep(),
             "points" => $this->points
@@ -132,8 +133,10 @@ class field {
         $disk = json_decode(file_get_contents('field.json'), true);
         $points = array();
         foreach ($disk['points'] as $raw_point) {
+            error_log("Loading point with x: " . $raw_point['x']);
             array_push($points, new point($this, 0, $raw_point['x'], $raw_point['y']));
         }
+        $this->points = $points;
     }
 
     private function initDisk() {
@@ -157,37 +160,12 @@ class field {
         $this->checkCollisions();
     }
 
-    public function debug() {
-        $beforefisx = array(
-            'type' => 'field',
-            'validity' => ($this->valid ? 'valid' : 'invalid'),
-            'bounds' => array(
-                'x_min' => $this->x_min,
-                'x_max' => $this->x_max,
-                'y_min' => $this->y_min,
-                'y_max' => $this->y_max
-            ),
-            'points' => $this->points
-        );
-        $this->calculate();
-        $afterfisx = array(
-            'type' => 'field',
-            'validity' => ($this->valid ? 'valid' : 'invalid'),
-            'bounds' => array(
-                'x_min' => $this->x_min,
-                'x_max' => $this->x_max,
-                'y_min' => $this->y_min,
-                'y_max' => $this->y_max
-            ),
-            'points' => $this->points
-        );
-        echo json_encode(array($beforefisx, $afterfisx));    
-    }
-
     public function calculate() {
         // Ensure disk is setup
         $this->initDisk();
 
+
+        error_log("before ifs getstep: " . $this->getStep() . " getlaststep: " . $this->getLastStep());
         // if the step is the first step, clear the field, build the points, and run fisx
         if($this->getStep() === 1) {
             $this->resetDisk();
@@ -201,7 +179,7 @@ class field {
         }
         // if the step is n and n-1 != last step, then throw exception (request out of sequence)
         else if($this->getStep()-1 !== $this->getLastStep()) {
-            throw new \Exception('request out of sequence');
+            throw new \Exception('request out of sequence req step: ' . $this->getStep() . " laststep: " . $this->getLastStep());
         }
 
         // Run physics calculations
@@ -232,9 +210,12 @@ class field {
         // Set background
         imagefilledrectangle($gd, $border, $border, $this->getBounds('x', 'max') - $border*1.5, $this->getBounds('y', 'max') - $border*1.5, $white);
 
+        error_log("IMG points");
         foreach ($this->points as $point) {
+            error_log("Point found ");
             $pointx = round($point->getX());
             $pointy = round($point->getY());
+            error_log("x: " . $pointx . " y:" . $pointy);
             imagesetpixel($gd, $pointx, $pointy-1, $black);
             imagesetpixel($gd, $pointx-1, $pointy, $black);
             imagesetpixel($gd, $pointx, $pointy, $black);

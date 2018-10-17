@@ -11,7 +11,7 @@ class point {
     public function __construct(\phpfisx\areas\field $field, int $seed = 0, int $existing_x = 0, int $existing_y = 0) {
         $this->id = $this->uuid();
         $this->field = $field;
-        if($existing_x === INF && $existing_y === INF) {
+        if($seed !== 0) {
             srand($seed);
             $this->setCoords(
                 rand($this->field->getBounds('x', 'min'), $this->field->getBounds('x', 'max')),
@@ -97,5 +97,9 @@ class point {
 
     public function getY() {
         return $this->y;
+    }
+
+    public function getID() {
+        return $this->id;
     }
 }
