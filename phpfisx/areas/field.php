@@ -158,8 +158,7 @@ class field {
     }
 
     public function debug() {
-        $this->runFisx();
-        echo json_encode(array(
+        $beforefisx = array(
             'type' => 'field',
             'validity' => ($this->valid ? 'valid' : 'invalid'),
             'bounds' => array(
@@ -169,10 +168,23 @@ class field {
                 'y_max' => $this->y_max
             ),
             'points' => $this->points
-        ));        
+        );
+        $this->calculate();
+        $afterfisx = array(
+            'type' => 'field',
+            'validity' => ($this->valid ? 'valid' : 'invalid'),
+            'bounds' => array(
+                'x_min' => $this->x_min,
+                'x_max' => $this->x_max,
+                'y_min' => $this->y_min,
+                'y_max' => $this->y_max
+            ),
+            'points' => $this->points
+        );
+        echo json_encode(array($beforefisx, $afterfisx));    
     }
 
-    public function visualize() {
+    public function calculate() {
         // Ensure disk is setup
         $this->initDisk();
 
@@ -199,6 +211,10 @@ class field {
         // Save to disk
         $this->persistToDisk();
         error_log('persisted to disk');
+    }
+
+    public function visualize() {
+        $this->calculate();
 
         $gd = imagecreatetruecolor($this->x_max, $this->y_max);
 
