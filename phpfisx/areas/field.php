@@ -126,7 +126,7 @@ class field {
             "points" => $this->points
         )));
         fclose($fp);
-        $this->saveGrafanaDB();
+        // $this->saveGrafanaDB();
     }
 
     private function pointsToXYArray($points) {
