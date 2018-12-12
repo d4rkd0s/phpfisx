@@ -102,7 +102,8 @@ class field {
 
     private function applyGravity() {
          foreach ($this->points as $point) {
-            $point->applyForce($this->getGravity()*($this->step*$this->getGravity()), round(0), $this->step);
+             //$this->getGravity()*($this->step*$this->getGravity())
+            $point->applyForce($this->getGravity(), round(0), $this->step);
         }
     }
 
