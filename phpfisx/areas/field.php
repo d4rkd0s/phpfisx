@@ -168,16 +168,16 @@ class field {
     }
 
     public function runFisx() {
-        $forces = array(
-            [
-                "ids"=>"all",
-                "force"=>"linear",
-                "direction"=>170,
-                "amount"=>10,
-                "steps"=>[1,2,3]
-            ]
-        );
-        $this->applyForces($forces);
+//         $forces = array(
+//             [
+//                 "ids"=>"all",
+//                 "force"=>"linear",
+//                 "direction"=>170,
+//                 "amount"=>10,
+//                 "steps"=>[1,2,3]
+//             ]
+//         );
+//         $this->applyForces($forces);
         $this->applyGravity();
         $this->checkCollisions();
     }
