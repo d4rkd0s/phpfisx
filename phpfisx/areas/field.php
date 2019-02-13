@@ -137,7 +137,7 @@ class field {
         }
         return $set;
     }
-    
+
     private function loadFromDisk() {
         $disk = json_decode(file_get_contents('field.json'), true);
         $points = array();
@@ -145,12 +145,6 @@ class field {
             array_push($points, new point($this, 0, $raw_point['id'], $raw_point['x'], $raw_point['y']));
         }
         $this->points = $points;
-    }
-
-    private function initDisk() {
-        if(!file_exists('field.json')) {
-            $this->resetDisk();
-        }
     }
 
     public function runFisx() {
@@ -170,7 +164,7 @@ class field {
 
     public function calculate() {
         // Ensure disk is setup
-        $this->initDisk();
+        if(!file_exists('field.json')) { $this->resetDisk(); }
 
         // if the step is the first step, clear the field, build the points, and run fisx
         if($this->getStep() === 1) {
