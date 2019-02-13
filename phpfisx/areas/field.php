@@ -127,15 +127,6 @@ class field {
             "points" => $this->points
         )));
         fclose($fp);
-        // $this->saveGrafanaDB();
-    }
-
-    private function pointsToXYArray($points) {
-        $set = array();
-        foreach ($points as $point) {
-            array_push($set, $point->getCoords());
-        }
-        return $set;
     }
 
     private function loadFromDisk() {
