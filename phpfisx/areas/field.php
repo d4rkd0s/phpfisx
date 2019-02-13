@@ -137,22 +137,7 @@ class field {
         }
         return $set;
     }
-
-    private function saveGrafanaDB() {
-        $fp = fopen('grafana.json', 'w');
-        fwrite($fp, json_encode(array(
-            "columns" => array(
-                array("text" => "x", "type" => "string"),
-                array("text" => "y", "type" => "string")
-            ),
-            "rows" => array(
-                $this->pointsToXYArray($this->points)
-            ),
-            "type" => "table"
-        )));
-        fclose($fp);
-    }
-
+    
     private function loadFromDisk() {
         $disk = json_decode(file_get_contents('field.json'), true);
         $points = array();
