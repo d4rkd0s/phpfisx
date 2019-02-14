@@ -29,16 +29,16 @@ class field {
         $this->setGravity($gravity);
     }
 
+    public function desiredPointCount(int $num) {
+        $this->pointCount = $num;
+    }
+
     public function getBorder() {
         return $this->border;
     }
 
     private function setGravity($gravity) {
         $this->gravity = $gravity;
-    }
-
-    public function desiredPointCount(int $num) {
-        $this->pointCount = $num;
     }
 
     private function getGravity() {
@@ -58,18 +58,12 @@ class field {
         return $disk['step'];
     }
 
-    public function getBounds($axis, $type) {
-        switch ($axis) {
-            case 'x':
-                if ($type === "min") { return $this->x_min; }
-                else if ($type === "max") { return $this->x_max; }
-                break;
-            case 'y':
-                if ($type === "min") { return $this->y_min;}
-                else if ($type === "max") { return $this->y_max; }
-            break;
-            default: return 0; break;
-        }
+    public function getXMax() {
+        return $this->x_max;
+    }
+
+    public function getYMax() {
+        return $this->x_max;
     }
 
     private function ensureFieldSpace() {
@@ -192,10 +186,10 @@ class field {
         $blue = imagecolorallocate($gd, 0, 0, 255);
         
         // Set frame
-        imagefilledrectangle($gd, 0, 0, $this->getBounds('x', 'max'), $this->getBounds('y', 'max'), $black);
+        imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
 
         // Set background
-        imagefilledrectangle($gd, $border, $border, $this->getBounds('x', 'max') - $border*1.5, $this->getBounds('y', 'max') - $border*1.5, $white);
+        imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border*1.5, $this->getYMax() - $border*1.5, $white);
 
         foreach ($this->points as $point) {
             $pointx = round($point->getX());

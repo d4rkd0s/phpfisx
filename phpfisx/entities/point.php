@@ -14,8 +14,8 @@ class point {
             $this->id = $this->uuid();
             srand($seed);
             $this->setCoords(
-                rand($this->field->getBounds('x', 'min'), $this->field->getBounds('x', 'max')),
-                rand($this->field->getBounds('y', 'min'), $this->field->getBounds('y', 'max'))
+                rand(0, $this->field->getXMax()),
+                rand(0, $this->field->getYMax())
             );
         } else {
             $this->id = $existing_id;
@@ -57,20 +57,20 @@ class point {
             $final_y = $new_y;
             // Set border
             // if x is pos out of bounds, limit x to max bounds
-            if($new_x > $this->field->getBounds("x", "max")) {
-                $final_x = $this->field->getBounds("x", "max") - $this->field->getBorder();
+            if($new_x > $this->field->getXMax()) {
+                $final_x = $this->field->getXMax() - $this->field->getBorder();
             }
             // if y is pos out of bounds, limit y to max bounds
-            if($new_y > $this->field->getBounds("y", "max")) {
-                $final_y = $this->field->getBounds("y", "max") - $this->field->getBorder();
+            if($new_y > $this->field->getYMax()) {
+                $final_y = $this->field->getYMax() - $this->field->getBorder();
             }
             // if x is neg out of bounds, limit x to min bounds
-            if($new_x < $this->field->getBounds("x", "min")) {
-                $final_x = $this->field->getBounds("x", "min") + $this->field->getBorder();
+            if($new_x < 0) {
+                $final_x = 0 + $this->field->getBorder();
             }
             // if y is neg out of bounds, limit y to min bounds
-            if($new_y < $this->field->getBounds("y", "min")) {
-                $final_y = $this->field->getBounds("y", "min") + $this->field->getBorder();
+            if($new_y < 0) {
+                $final_y = 0 + $this->field->getBorder();
             }
         }
         // Check distance traveled matches distance requested
