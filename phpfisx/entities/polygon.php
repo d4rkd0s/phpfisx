@@ -120,31 +120,31 @@ class polygon {
         return $this;
     }
 
-    /**
-     * Compute the axis-aligned bounding box.
-     * @return box
-     */
-    public function getAABB() {
-        $len = count($this->calcPoints);
-        $points = &$this->calcPoints;
-        $xMin = $this->points[0]->x;
-        $yMin = $points[0]->y;
-        $xMax = $points[0]->x;
-        $yMax = $points[0]->y;
-        for ($i = 1; $i < $len; $i++) {
-            $point = &$points[$i];
-            if ($point->x < $xMin) {
-              $xMin = $point->x;
-            } else if ($point->x > $xMax) {
-              $xMax = $point->x;
-            }
-            if ($point->y < $yMin) {
-              $yMin = $point->y;
-            } else if ($point->y > $yMax) {
-              $yMax = $point->y;
-            }
-        }
-        $pos = clone $this->pos;
-        return (new box($pos->add(new vector($xMin, $yMin)), $xMax - $xMin, $yMax - $yMin))->toPolygon();
-    }
+    // /**
+    //  * Compute the axis-aligned bounding box.
+    //  * @return box
+    //  */
+    // public function getAABB() {
+    //     $len = count($this->calcPoints);
+    //     $points = &$this->calcPoints;
+    //     $xMin = $this->points[0]->x;
+    //     $yMin = $points[0]->y;
+    //     $xMax = $points[0]->x;
+    //     $yMax = $points[0]->y;
+    //     for ($i = 1; $i < $len; $i++) {
+    //         $point = &$points[$i];
+    //         if ($point->x < $xMin) {
+    //           $xMin = $point->x;
+    //         } else if ($point->x > $xMax) {
+    //           $xMax = $point->x;
+    //         }
+    //         if ($point->y < $yMin) {
+    //           $yMin = $point->y;
+    //         } else if ($point->y > $yMax) {
+    //           $yMax = $point->y;
+    //         }
+    //     }
+    //     $pos = clone $this->pos;
+    //     return (new box($pos->add(new vector($xMin, $yMin)), $xMax - $xMin, $yMax - $yMin))->toPolygon();
+    // }
 }
