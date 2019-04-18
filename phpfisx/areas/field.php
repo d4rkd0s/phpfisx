@@ -14,6 +14,7 @@ class field {
     private $gravity;
 
     private $step;
+    private $steps;
 
     private $border;
 
@@ -43,6 +44,14 @@ class field {
 
     private function getGravity() {
         return $this->gravity;
+    }
+
+    public function setSteps(int $steps) {
+        $this->steps = $steps;
+    }
+
+    public function getSteps() {
+        return $this->steps;
     }
 
     public function setStep(int $step) {
@@ -88,7 +97,7 @@ class field {
             // Random Light Force
             foreach($forces as $force) {
                 if(in_array($this->step, $force['steps'])){
-                    $point->applyForce($force['amount'], $force['direction'], $this->step);
+                    // $point->applyForce($force['amount'], $force['direction'], $this->getStep());
                 }
             }
         }
@@ -96,8 +105,8 @@ class field {
 
     private function applyGravity() {
          foreach ($this->points as $point) {
-             //$this->getGravity()*($this->step*$this->getGravity())
-            $point->applyForce($this->getGravity(), round(0), $this->step);
+            // $this->getGravity()*($this->step*$this->getGravity())
+            $point->applyForce($this->getGravity(), round(0), $this->getStep());
         }
     }
 
@@ -133,16 +142,16 @@ class field {
     }
 
     public function runFisx() {
-//         $forces = array(
-//             [
-//                 "ids"=>"all",
-//                 "force"=>"linear",
-//                 "direction"=>170,
-//                 "amount"=>10,
-//                 "steps"=>[1,2,3]
-//             ]
-//         );
-//         $this->applyForces($forces);
+        // $forces = array(
+        //     [
+        //         "ids"=>"all",
+        //         "force"=>"linear",
+        //         "direction"=>170,
+        //         "amount"=>10,
+        //         "steps"=>[1,2,3]
+        //     ]
+        // );
+        // $this->applyForces($forces);
         $this->applyGravity();
         $this->checkCollisions();
     }
@@ -152,7 +161,7 @@ class field {
         if(!file_exists('field.json')) { $this->resetDisk(); }
 
         // if the step is the first step, clear the field, build the points, and run fisx
-        if($this->getStep() === 1) {
+        if($this->getStep() === 1 || $this->getStep() === 0) {
             $this->resetDisk();
             $this->generatePoints();
         } 
@@ -173,43 +182,49 @@ class field {
     }
 
     public function visualize() {
-        $this->calculate();
-
-        $gd = imagecreatetruecolor($this->x_max, $this->y_max);
-
-        $border = 2;
-
-        $white = imagecolorallocate($gd, 255, 255, 255);
-        $gray = imagecolorallocate($gd, 245, 245, 245);
-        $black = imagecolorallocate($gd, 0, 0, 0);
-        $red = imagecolorallocate($gd, 255, 0, 0);
-        $blue = imagecolorallocate($gd, 0, 0, 255);
-        
-        // Set frame
-        imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
-
-        // Set background
-        imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border*1.5, $this->getYMax() - $border*1.5, $white);
-
-        foreach ($this->points as $point) {
-            $pointx = round($point->getX());
-            $pointy = round($point->getY());
-            imagesetpixel($gd, $pointx, $pointy-1, $black);
-            imagesetpixel($gd, $pointx-1, $pointy, $black);
-            imagesetpixel($gd, $pointx, $pointy, $black);
-            imagesetpixel($gd, $pointx+1, $pointy, $black);
-            imagesetpixel($gd, $pointx, $pointy+1, $black);
+        $frames = array();
+        $durations = array();
+        for ($step=1; $step <= $this->steps; $step++) { 
+            $this->setStep($step);
+            $this->calculate();
+            $gd = imagecreatetruecolor($this->x_max, $this->y_max);
+            $border = 2;
+            $white = imagecolorallocate($gd, 255, 255, 255);
+            $gray = imagecolorallocate($gd, 245, 245, 245);
+            $black = imagecolorallocate($gd, 0, 0, 0);
+            $red = imagecolorallocate($gd, 255, 0, 0);
+            $blue = imagecolorallocate($gd, 0, 0, 255);
+            // Set frame
+            imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
+            // Set background
+            imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border*1.5, $this->getYMax() - $border*1.5, $white);
+            foreach ($this->points as $point) {
+                $pointx = round($point->getX());
+                $pointy = round($point->getY());
+                imagesetpixel($gd, $pointx, $pointy-1, $black);
+                imagesetpixel($gd, $pointx-1, $pointy, $black);
+                imagesetpixel($gd, $pointx, $pointy, $black);
+                imagesetpixel($gd, $pointx+1, $pointy, $black);
+                imagesetpixel($gd, $pointx, $pointy+1, $black);
+            }
+            // Set text background
+            imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($this->step))), 20, $gray);
+            // Set details
+            imagestring($gd, 4, 4, 4, 'time ' . $step, $black);
+            
+            // header('Content-Type: image/png');
+            array_push($frames, "images/image" . strval($step) . ".png");
+            array_push($durations, 10);
+            imagepng($gd, "images/image" . strval($step) . ".png", 0, NULL);
         }
 
-        
-        // Set text background
-        imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($this->step))), 20, $gray);
 
-        // Set details
-        imagestring($gd, 4, 4, 4, 'time ' . $this->step, $black);
-        
-        header('Content-Type: image/png');
-        imagepng($gd);
+        $gc = new \GifCreator\GifCreator();
+        $gc->create($frames, $durations, 0);
+        header('Content-type: image/gif');
+        header('Content-Disposition: filename="render.gif"');
+        $gifBinary = $gc->getGif();
+        echo $gifBinary;
     }
 
 }

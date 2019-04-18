@@ -46,7 +46,7 @@ class point {
     public function applyForce(int $amount, int $direction, int $step) {
         $new_x = $this->getX();
         $new_y = $this->getY();
-        for ($i=0; $i < $step; $i++) { 
+        for ($i=0; $i < $step; $i++) {
             // Calculate X,Y from Cos/Sin
             $new_x = $new_x + ($amount * (sin(deg2rad($direction))));
             $new_y = $new_y + ($amount * (cos(deg2rad($direction))));

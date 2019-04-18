@@ -23,21 +23,13 @@
 </head>
 <body>
     <img src="/logo.png" style="padding:42px; height: 100px;"><br>
-    <iframe src="/run.php?step=1" width="500" height="500" id="system"></iframe>
+    <iframe src="/run.php" width="500" height="500" id="system"></iframe>
     <script>
     document.addEventListener("DOMContentLoaded", function() {
-        var num_of_steps = 25;
         function changeTitle(title) { document.title = title; }
-        changeTitle("phpfisx - idle");
-        var i = 1;
+        changeTitle("phpfisx - rendering");
         document.getElementById('system').onload= function() {
-            if(i < num_of_steps) {
-                i++;
-                document.getElementById('system').src = '/run.php?step=' + i;
-                changeTitle("phpfisx - step " + i);
-            } else {
-                changeTitle("phpfisx - idle");
-            }
+            changeTitle("phpfisx - rendered");
         };
     });
     </script>
