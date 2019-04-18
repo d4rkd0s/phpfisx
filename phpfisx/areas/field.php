@@ -214,7 +214,7 @@ class field {
             
             // header('Content-Type: image/png');
             array_push($frames, "images/image" . strval($step) . ".png");
-            array_push($durations, 10);
+            array_push($durations, 1);
             imagepng($gd, "images/image" . strval($step) . ".png", 0, NULL);
         }
 
