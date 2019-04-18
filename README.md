@@ -11,6 +11,8 @@ Currently I have my latest "simulation" hard coded into the repo, but its easy t
 
 Install php first http://php.net/manual/en/install.php
 
+Ensure you have `php_gd2` enabled for image rendering.
+
 1. Clone the repo and go into the directory
 `git clone https://github.com/d4rkd0s/phpfisx && cd phpfisx`
 
