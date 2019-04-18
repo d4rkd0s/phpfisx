@@ -97,14 +97,20 @@ class field {
             // Random Light Force
             foreach($forces as $force) {
                 if(in_array($this->step, $force['steps'])){
-                    // $point->applyForce($force['amount'], $force['direction'], $this->getStep());
+                    $point->applyForce($force['amount'], $force['direction'], $this->getStep());
                 }
             }
         }
     }
 
+    private function turbulence($amount = 1) {
+        foreach ($this->points as $point) {
+            $point->applyForce(round(rand(0,$amount)), round(rand(1,360)), $this->getStep());
+        }
+    }
+
     private function applyGravity() {
-         foreach ($this->points as $point) {
+        foreach ($this->points as $point) {
             // $this->getGravity()*($this->step*$this->getGravity())
             $point->applyForce($this->getGravity(), round(0), $this->getStep());
         }
@@ -146,12 +152,13 @@ class field {
         //     [
         //         "ids"=>"all",
         //         "force"=>"linear",
-        //         "direction"=>170,
-        //         "amount"=>10,
-        //         "steps"=>[1,2,3]
+        //         "direction"=>90,
+        //         "amount"=>1,
+        //         "steps"=>[1,2,3,7,8,9,13,14,15,19,20,21,25]
         //     ]
         // );
         // $this->applyForces($forces);
+        $this->turbulence(); 
         $this->applyGravity();
         $this->checkCollisions();
     }
