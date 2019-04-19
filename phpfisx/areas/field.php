@@ -2,6 +2,7 @@
 namespace phpfisx\areas;
 
 use \phpfisx\entities\point as point;
+use \phpfisx\entities\line as line;
 
 class field {
     private $x_min = 0;
@@ -11,6 +12,7 @@ class field {
 
     private $valid = false;
     private $points = array();
+    private $lines = array();
     private $gravity;
 
     private $step;
@@ -91,6 +93,12 @@ class field {
         }
     }
 
+    public function generateLines() {
+        for ($i=0; $i < 3; $i++) { 
+            $this->lines[$i] = new line($this, $i);
+        }
+    }
+
     private function applyForces(array $forces) {
         // Run physics on each point
         foreach ($this->points as $point) {
@@ -124,7 +132,8 @@ class field {
         $fp = fopen('field.json', 'w');
         fwrite($fp, json_encode(array(
             "step" => 0,
-            "points" => array()
+            "points" => array(),
+            "lines" => array()
         )));
         fclose($fp);
     }
@@ -133,7 +142,8 @@ class field {
         $fp = fopen('field.json', 'w');
         fwrite($fp, json_encode(array(
             "step" => $this->getStep(),
-            "points" => $this->points
+            "points" => $this->points,
+            "lines" => $this->lines
         )));
         fclose($fp);
     }
@@ -145,6 +155,11 @@ class field {
             array_push($points, new point($this, 0, $raw_point['id'], $raw_point['x'], $raw_point['y']));
         }
         $this->points = $points;
+        $lines = array();
+        foreach ($disk['lines'] as $raw_line) {
+            array_push($lines, new line($this, 0, $raw_line['id'], $raw_line['start_x'], $raw_line['start_y'], $raw_line['end_x'], $raw_line['end_y']));
+        }
+        $this->lines = $lines;
     }
 
     public function runFisx() {
@@ -171,6 +186,7 @@ class field {
         if($this->getStep() === 1 || $this->getStep() === 0) {
             $this->resetDisk();
             $this->generatePoints();
+            $this->generateLines();
         } 
         // if the step is n and n-1 = last step, then load points from file
         else if($this->getStep()-1 === $this->getLastStep()) {
@@ -205,6 +221,7 @@ class field {
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
             // Set background
             imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border*1.5, $this->getYMax() - $border*1.5, $white);
+            # Fill in points
             foreach ($this->points as $point) {
                 $pointx = round($point->getX());
                 $pointy = round($point->getY());
@@ -213,6 +230,10 @@ class field {
                 imagesetpixel($gd, $pointx, $pointy, $black);
                 imagesetpixel($gd, $pointx+1, $pointy, $black);
                 imagesetpixel($gd, $pointx, $pointy+1, $black);
+            }
+            # Fill in lines
+            foreach ($this->lines as $line) {
+                imageline($gd, $line->getStartX(), $line->getStartY(), $line->getEndX(), $line->getEndY(), $black);
             }
             // Set text background
             imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($this->step))), 20, $gray);
