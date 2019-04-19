@@ -32,6 +32,10 @@ class field {
         $this->setGravity($gravity);
     }
 
+    public function getLines() {
+        return $this->lines;
+    }
+
     public function desiredPointCount(int $num) {
         $this->pointCount = $num;
     }
