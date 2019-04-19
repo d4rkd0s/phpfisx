@@ -220,6 +220,7 @@ class field {
             $gray = imagecolorallocate($gd, 245, 245, 245);
             $black = imagecolorallocate($gd, 0, 0, 0);
             $red = imagecolorallocate($gd, 255, 0, 0);
+            $green = imagecolorallocate($gd, 0, 255, 0);
             $blue = imagecolorallocate($gd, 0, 0, 255);
             // Set frame
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
