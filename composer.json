@@ -1,5 +1,11 @@
 {
+    "name": "d4rkd0s/phpfisx",
+    "config": {
+        "platform": {
+            "php": "7.2"
+        }
+    },
     "require": {
-        "sybio/gif-creator": "^1.0"
+        "lunakid/anim-gif": "^1.3"
     }
 }

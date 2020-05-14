@@ -252,11 +252,11 @@ class field {
         }
 
 
-        $gc = new \GifCreator\GifCreator();
-        $gc->create($frames, $durations, 0);
+        $anim = new \GifCreator\AnimGif();
+        $anim->create($frames, $durations, 0);
         header('Content-type: image/gif');
         header('Content-Disposition: filename="render.gif"');
-        $gifBinary = $gc->getGif();
+        $gifBinary = $anim->get();
         echo $gifBinary;
     }
 
