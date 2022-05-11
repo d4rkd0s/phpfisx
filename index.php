@@ -30,9 +30,14 @@
     <img src="/logo.png" style="padding:42px; height: 100px;"><br>
     <button id="renderbtn" onclick="start()">Render</button>
     <p id="status"></p>
-    <iframe src="" width="500" height="500" id="system"></iframe>
+    <iframe src="" width="1000" height="1000" id="system"></iframe>
     <script>
     var rendering = new Audio('/sounds/rendering.mp3');
+    // loop rendering audio
+    rendering.addEventListener('ended', function() {
+        this.currentTime = 0;
+        this.play();
+    }, false);
     var done = new Audio('/sounds/done.mp3');
     function changeTitle(title) {
             document.title = title; 

@@ -80,7 +80,18 @@ class point {
         } else {
             throw new \Exception("Invalid vector movement");
         }
-        
+    }
+
+    public function checkCollisions($lines) {
+        foreach($lines as $line) {
+            $point_x = $this->getX();
+            $point_y = $this->getY();
+            // Check if point is on the line
+            if($line->isOnLine($point_x, $point_y)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function setCoords($x, $y) {
