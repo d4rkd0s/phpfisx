@@ -5,7 +5,11 @@
             "php": "7.2"
         }
     },
+    "repositories": [{
+        "type": "vcs",
+        "url": "http://github.com/d4rkd0s/animgif"
+    }],
     "require": {
-        "lunakid/anim-gif": "^1.3"
+        "lunakid/anim-gif": "dev-main"
     }
 }
