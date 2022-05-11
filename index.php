@@ -19,19 +19,39 @@
             padding: 0;
             border: none;
         }
+        #status {
+            font-size: 24px;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
     </style>
 </head>
-<body>
+<body style="background-color:gray;">
     <img src="/logo.png" style="padding:42px; height: 100px;"><br>
-    <iframe src="/run.php" width="500" height="500" id="system"></iframe>
+    <button id="renderbtn" onclick="start()">Render</button>
+    <p id="status"></p>
+    <iframe src="" width="500" height="500" id="system"></iframe>
     <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        function changeTitle(title) { document.title = title; }
-        changeTitle("phpfisx - rendering");
-        document.getElementById('system').onload= function() {
-            changeTitle("phpfisx - rendered");
+    var rendering = new Audio('/sounds/rendering.mp3');
+    var done = new Audio('/sounds/done.mp3');
+    function changeTitle(title) {
+            document.title = title; 
+            document.getElementById("status").innerHTML = title;
+    }
+    function start(){
+        document.getElementById("renderbtn").remove();
+        document.getElementById('system').src = 'render.php';
+        changeTitle("Rendering... 🌀");
+        // Play rendering sound
+        rendering.play();
+        document.getElementById('system').onload = function() {
+            rendering.pause();
+            console.log(document.getElementById('system').src);
+            changeTitle("Rendered ✔️");
+            done.play();
         };
-    });
+    }
+    changeTitle("Waiting...");
     </script>
 </body>
 </html>
