@@ -5,6 +5,8 @@ use \phpfisx\entities\point as point;
 use \phpfisx\entities\line as line;
 
 class field {
+    private $TURBULENCE_LEVEL = 1000;
+
     private $x_min = 0;
     private $x_max = 0;
     private $y_min = 0;
@@ -117,7 +119,7 @@ class field {
 
     private function turbulence($amount = 1) {
         foreach ($this->points as $point) {
-            $point->applyForce(round(rand(0,$amount)), round(rand(1,360)), $this->getStep());
+            $point->applyForce(round(rand(0,$amount)), round(rand(1,$this->TURBULENCE_LEVEL)), $this->getStep());
         }
     }
 
@@ -129,7 +131,9 @@ class field {
     }
 
     private function checkCollisions() {
-        return true;
+        foreach ($this->points as $point) {
+            $point->checkCollisions($this->lines);
+        }
     }
 
     private function resetDisk() {
@@ -190,7 +194,7 @@ class field {
         if($this->getStep() === 1 || $this->getStep() === 0) {
             $this->resetDisk();
             $this->generatePoints();
-            $this->generateLines();
+            // $this->generateLines();
         } 
         // if the step is n and n-1 = last step, then load points from file
         else if($this->getStep()-1 === $this->getLastStep()) {
@@ -248,7 +252,7 @@ class field {
             // header('Content-Type: image/png');
             array_push($frames, "images/image" . strval($step) . ".png");
             array_push($durations, 1);
-            imagepng($gd, "images/image" . strval($step) . ".png", 0, NULL);
+            imagepng($gd, "images/image" . strval($step) . ".png", 0, 0);
         }
 
 

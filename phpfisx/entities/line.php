@@ -38,6 +38,28 @@ class line {
         $this->end_x = $end_x;
         $this->end_y = $end_y;
     }
+    
+    public function isOnLine(int $x, int $y) {
+        $x1 = $this->start_x;
+        $y1 = $this->start_y;
+        $x2 = $this->end_x;
+        $y2 = $this->end_y;
+        $x3 = $x;
+        $y3 = $y;
+        $x4 = $this->end_x;
+        $y4 = $this->end_y;
+        $denominator = (($y4 - $y3) * ($x2 - $x1)) - (($x4 - $x3) * ($y2 - $y1));
+        $numerator_a = (($x4 - $x3) * ($y1 - $y3)) - (($y4 - $y3) * ($x1 - $x3));
+        $numerator_b = (($x2 - $x1) * ($y1 - $y3)) - (($y2 - $y1) * ($x1 - $x3));
+        if($denominator==0) { return false; }
+        $ua = $numerator_a / $denominator;
+        $ub = $numerator_b / $denominator;
+        if ($ua >= 0 && $ua <= 1 && $ub >= 0 && $ub <= 1) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     public function getCoords() {
         return array($this->getStartX(), $this->getStartY(), $this->getEndX(), $this->getEndY());
