@@ -31,7 +31,7 @@ Then visit: http://localhost:8000/
 
 It should... work:
 
-![alt text](quick_start.png)
+![Image explaining to run, yarn start, and the website is available via, localhost, on port, 8080](quick_start.png)
 
 ### How?
 
@@ -41,6 +41,15 @@ Using PHP, and some simple Object Oriented programming. A re-used random seed is
 
 Theres plenty of complex, overbloated libraries in many languages. Most graphics / simulations are ran in compiled languages like C, C++, Java, Golang... etc. But I know what I wanted to achieve wasn't overly complex (at least when I started) and PHP is such a friendly language, it's ability to run on the fly without compiling and interoperability with the web. Makes is portable and easy to use, all you need is php (internal web server with `php -S`) and a browser.
 
+### Reporting Issues
+
+Please use the standard GitHub issue tracker.
+
+Report issues here: https://github.com/d4rkd0s/phpfisx/issues/new/choose
+
+Select Bug or Feature.
+
+![Image showcasing the different issue choices, bug, and, feature, which are available at, https://github.com/d4rkd0s/phpfisx/issues/new/choose](bug-feature-image.png)
 
 ### Planned Features
 
