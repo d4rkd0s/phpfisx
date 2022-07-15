@@ -1,0 +1,14 @@
+{
+    "name": "phpfisx",
+    "version": "1.0.0",
+    "description": "Just for local Dev launching via yarn ... xyz abc",
+    "main": "none",
+    "repository": "git@github.com:d4rkd0s/phpfisx.git",
+    "author": "Logan Schmidt <d4rkd0s@gmail.com>",
+    "license": "MIT",
+    "scripts": {
+        "install": "composer install",
+        "test": "composer test",
+        "start": "yarn install && echo 'Visit: https://localhost:8000; && php -S localhost:8000"
+    }
+}
