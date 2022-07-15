@@ -2,7 +2,10 @@
     "name": "d4rkd0s/phpfisx",
     "config": {
         "platform": {
-            "php": "7.2"
+            "php": "8.0"
+        },
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
         }
     },
     "repositories": [{
@@ -11,5 +14,8 @@
     }],
     "require": {
         "lunakid/anim-gif": "dev-main"
+    },
+    "require-dev": {
+        "pestphp/pest": "^1.21"
     }
 }
