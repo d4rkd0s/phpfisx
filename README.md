@@ -41,6 +41,22 @@ Using PHP, and some simple Object Oriented programming. A re-used random seed is
 
 Theres plenty of complex, overbloated libraries in many languages. Most graphics / simulations are ran in compiled languages like C, C++, Java, Golang... etc. But I know what I wanted to achieve wasn't overly complex (at least when I started) and PHP is such a friendly language, it's ability to run on the fly without compiling and interoperability with the web. Makes is portable and easy to use, all you need is php (internal web server with `php -S`) and a browser.
 
+### Why? (Asking Chat GPT 😂)
+
+Prompt: `What would you want to run a physics simulation in PHP? What would be the benefits of using PHP as your selected language?`
+
+Answer:
+
+```
+There are a few benefits to using PHP for running a physics simulation:
+
+PHP is a general-purpose programming language, so it has a lot of built-in features and functions that you can use to build your simulation.
+
+PHP is a server-side language, so you can easily set up a web-based interface for your simulation. This can make it easy for users to interact with your simulation and view the results.
+
+PHP is relatively easy to learn and use, so it may be a good choice for someone who is just starting out with programming or who is not an experienced software developer.
+```
+
 ### Reporting Issues
 
 Please use the standard GitHub issue tracker.
