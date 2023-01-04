@@ -47,15 +47,14 @@ Prompt: `What would you want to run a physics simulation in PHP? What would be t
 
 Answer:
 
-```
-There are a few benefits to using PHP for running a physics simulation:
+*There are a few benefits to using PHP for running a physics simulation:*
 
-PHP is a general-purpose programming language, so it has a lot of built-in features and functions that you can use to build your simulation.
+*- PHP is a general-purpose programming language, so it has a lot of built-in features and functions that you can use to build your simulation.*
 
-PHP is a server-side language, so you can easily set up a web-based interface for your simulation. This can make it easy for users to interact with your simulation and view the results.
+*- PHP is a server-side language, so you can easily set up a web-based interface for your simulation. This can make it easy for users to interact with your simulation and view the results.*
 
-PHP is relatively easy to learn and use, so it may be a good choice for someone who is just starting out with programming or who is not an experienced software developer.
-```
+*- PHP is relatively easy to learn and use, so it may be a good choice for someone who is just starting out with programming or who is not an experienced software developer.*
+
 
 ### Reporting Issues
 
