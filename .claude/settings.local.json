@@ -7,7 +7,8 @@
       "Bash(composer update)",
       "Bash(composer search gif animation)",
       "WebSearch",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
