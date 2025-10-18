@@ -31,7 +31,7 @@ class vector {
     public function rotate($angle){
         $this->x = $this->x * cos($angle) - $this->y * sin($angle);
         $this->y = $this->x * sin($angle) + $this->y * cos($angle);
-        return this;
+        return $this;
     }
     /**
      * Reverse this vector.

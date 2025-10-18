@@ -80,7 +80,7 @@ class field {
     }
 
     public function getYMax() {
-        return $this->x_max;
+        return $this->y_max;
     }
 
     private function ensureFieldSpace() {
@@ -256,11 +256,11 @@ class field {
         }
 
 
-        $anim = new \GifCreator\AnimGif();
-        $anim->create($frames, $durations, 0);
+        $gc = new \GifCreator\GifCreator();
+        $gc->create($frames, $durations, 0);
         header('Content-type: image/gif');
         header('Content-Disposition: filename="render.gif"');
-        $gifBinary = $anim->get();
+        $gifBinary = $gc->getGif();
         echo $gifBinary;
     }
 

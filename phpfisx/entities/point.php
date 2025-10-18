@@ -24,7 +24,12 @@ class point {
     }
 
     private function uuid() {
-        return rand(10000,99999) . '-' . rand(10000,99999) . '-' . rand(10000,99999) . '-' . rand(10000,99999);
+        return sprintf('%s-%s-%s-%s',
+            bin2hex(random_bytes(4)),
+            bin2hex(random_bytes(4)),
+            bin2hex(random_bytes(4)),
+            bin2hex(random_bytes(4))
+        );
     }
 
     public function getVelocity() {

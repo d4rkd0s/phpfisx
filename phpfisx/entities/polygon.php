@@ -52,7 +52,7 @@ class polygon {
      */
     public function setAngle($angle) {
         $this->angle = $angle;
-        $this->_recacl();
+        $this->_recalc();
         return $this;
     }
 
@@ -63,7 +63,7 @@ class polygon {
      */
     public function setOffset($offset) {
         $this->offset = $offset;
-        $this->_recacl();
+        $this->_recalc();
         return $this;
     }
 

@@ -1,6 +1,7 @@
 <?php
 
-require __DIR__ . "../../phpfisx/entities/vector.php";
+require __DIR__ . '/../boot.php';
+
 /*
 |--------------------------------------------------------------------------
 | Test Case

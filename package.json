@@ -9,6 +9,6 @@
     "scripts": {
         "install": "composer install",
         "test": "composer test",
-        "start": "yarn install && echo 'Visit: https://localhost:8000; && php -S localhost:8000"
+        "start": "yarn install && echo 'Visit: http://localhost:8000' && php -S localhost:8000"
     }
 }

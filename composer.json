@@ -8,14 +8,23 @@
             "pestphp/pest-plugin": true
         }
     },
-    "repositories": [{
-        "type": "vcs",
-        "url": "http://github.com/d4rkd0s/animgif"
-    }],
     "require": {
-        "lunakid/anim-gif": "dev-main"
+        "sybio/gif-creator": "^1.0"
     },
     "require-dev": {
         "pestphp/pest": "^1.21"
+    },
+    "autoload": {
+        "psr-4": {
+            "phpfisx\\": "phpfisx/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest"
     }
 }

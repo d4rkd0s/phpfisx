@@ -9,9 +9,8 @@ it('asserts true is true', function () {
     expect(true)->toBeTrue();
 });
 
-// it('instantiates', function () {
-//     // TODO: Class "phpfisx\areas\field" not found???????????
-//     // $field = new phpfisx_field(array(0,500,0,500));
-//     // $vector = new point($field);
-//     // $this->assertInstanceOf(point::class, $vector);
-// });
+it('instantiates', function () {
+    $field = new phpfisx_field(array(0,500,0,500));
+    $point = new point($field, 42);
+    expect($point)->toBeInstanceOf(point::class);
+});

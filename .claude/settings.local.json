@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer dump-autoload)",
+      "Bash(composer test)",
+      "Bash(composer install)",
+      "Bash(composer update)",
+      "Bash(composer search gif animation)",
+      "WebSearch",
+      "Bash(git add -A)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
