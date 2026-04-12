@@ -21,6 +21,7 @@ class field {
     private $gravity;
     private float $friction;
     private float $collisionRadius;
+    private float $restitution;
 
     private $step;
     private $steps;
@@ -36,15 +37,17 @@ class field {
      * @param float $friction        Velocity multiplier per step (0–1). 1 = no drag, 0 = instant stop.
      *                               Default 0.98 gives a terminal velocity of ~50px/step under gravity=1.
      * @param float $collisionRadius Minimum distance (px) before two points are treated as colliding.
+     * @param float $restitution     Bounciness coefficient for all collisions (0 = dead stop, 1 = perfectly elastic).
      */
-    public function __construct($bounds, $gravity = 1, $border = 4, float $friction = 0.98, float $collisionRadius = 5.0) {
-        $this->x_min          = $bounds[0];
-        $this->x_max          = $bounds[1];
-        $this->y_min          = $bounds[2];
-        $this->y_max          = $bounds[3];
-        $this->border         = $border;
-        $this->friction       = $friction;
+    public function __construct($bounds, $gravity = 1, $border = 4, float $friction = 0.98, float $collisionRadius = 5.0, float $restitution = 0.7) {
+        $this->x_min           = $bounds[0];
+        $this->x_max           = $bounds[1];
+        $this->y_min           = $bounds[2];
+        $this->y_max           = $bounds[3];
+        $this->border          = $border;
+        $this->friction        = $friction;
         $this->collisionRadius = $collisionRadius;
+        $this->restitution     = max(0.0, min(1.0, $restitution));
         $this->ensureFieldSpace();
         $this->setGravity($gravity);
     }
@@ -63,6 +66,10 @@ class field {
 
     public function getFriction(): float {
         return $this->friction;
+    }
+
+    public function getRestitution(): float {
+        return $this->restitution;
     }
 
     private function setGravity($gravity) {
@@ -173,9 +180,10 @@ class field {
             "points"      => array_map(fn($p) => $p->toArray(), $this->points),
             "lines"       => $this->lines,
             "constraints" => array_map(fn($c) => [
-                'a_id' => $c->getA()->getID(),
-                'b_id' => $c->getB()->getID(),
-                'rest' => $c->getRestLength(),
+                'a_id'     => $c->getA()->getID(),
+                'b_id'     => $c->getB()->getID(),
+                'rest'     => $c->getRestLength(),
+                'boundary' => $c->isBoundary(),
             ], $this->constraints),
         ]));
         fclose($fp);
@@ -205,7 +213,12 @@ class field {
         $this->constraints = [];
         foreach ($disk['constraints'] ?? [] as $rc) {
             if (isset($pointMap[$rc['a_id']], $pointMap[$rc['b_id']])) {
-                $this->constraints[] = new constraint($pointMap[$rc['a_id']], $pointMap[$rc['b_id']], $rc['rest']);
+                $this->constraints[] = new constraint(
+                    $pointMap[$rc['a_id']],
+                    $pointMap[$rc['b_id']],
+                    $rc['rest'],
+                    $rc['boundary'] ?? true
+                );
             }
         }
 
@@ -260,13 +273,13 @@ class field {
         $c = $this->makePoint($cx - $hw, $cy + $hh, $mass); // bottom-left
         $d = $this->makePoint($cx + $hw, $cy + $hh, $mass); // bottom-right
 
-        // Edges (4) + diagonals (2) to prevent shear
-        $this->constraints[] = new constraint($a, $b);
-        $this->constraints[] = new constraint($c, $d);
-        $this->constraints[] = new constraint($a, $c);
-        $this->constraints[] = new constraint($b, $d);
-        $this->constraints[] = new constraint($a, $d);
-        $this->constraints[] = new constraint($b, $c);
+        // Edges (4) — boundary surface; diagonals (2) — internal structural braces only
+        $this->constraints[] = new constraint($a, $b, -1.0, true);
+        $this->constraints[] = new constraint($c, $d, -1.0, true);
+        $this->constraints[] = new constraint($a, $c, -1.0, true);
+        $this->constraints[] = new constraint($b, $d, -1.0, true);
+        $this->constraints[] = new constraint($a, $d, -1.0, false); // diagonal
+        $this->constraints[] = new constraint($b, $c, -1.0, false); // diagonal
     }
 
     private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass): void {
@@ -276,15 +289,15 @@ class field {
             $pts[] = $this->makePoint($cx + $r * cos($angle), $cy + $r * sin($angle), $mass);
         }
 
-        // Ring constraints between adjacent perimeter points
+        // Ring constraints between adjacent perimeter points — boundary surface
         for ($i = 0; $i < $n; $i++) {
-            $this->constraints[] = new constraint($pts[$i], $pts[($i + 1) % $n]);
+            $this->constraints[] = new constraint($pts[$i], $pts[($i + 1) % $n], -1.0, true);
         }
 
-        // Cross constraints (diameters) for rigidity
+        // Cross constraints (diameters) for rigidity — internal only, never collide
         $half = (int)($n / 2);
         for ($i = 0; $i < $half; $i++) {
-            $this->constraints[] = new constraint($pts[$i], $pts[$i + $half]);
+            $this->constraints[] = new constraint($pts[$i], $pts[$i + $half], -1.0, false);
         }
     }
 
@@ -320,6 +333,7 @@ class field {
         $this->turbulence();       // loose points only (see below)
         $this->applyGravity();     // all points
         $this->resolvePointCollisions();
+        $this->resolveEdgeCollisions();
         foreach ($this->points as $point) {
             $point->integrate();
         }
@@ -373,10 +387,10 @@ class field {
                     continue;
                 }
 
-                // Elastic impulse: J = -2 * rvn / (1/ma + 1/mb)
+                // Impulse: J = -(1+e) * rvn / (1/ma + 1/mb)
                 $ma = $a->getMass();
                 $mb = $b->getMass();
-                $J  = -2.0 * $rvn / (1.0 / $ma + 1.0 / $mb);
+                $J  = -(1.0 + $this->restitution) * $rvn / (1.0 / $ma + 1.0 / $mb);
 
                 $va->x += ($J / $ma) * $nx;
                 $va->y += ($J / $ma) * $ny;
@@ -387,6 +401,98 @@ class field {
                 $overlap = ($radius - $dist) / 2.0;
                 $a->setCoords($a->getX() + $nx * $overlap, $a->getY() + $ny * $overlap);
                 $b->setCoords($b->getX() - $nx * $overlap, $b->getY() - $ny * $overlap);
+            }
+        }
+    }
+
+    /**
+     * resolveEdgeCollisions — Bounce loose points off rigid body boundary edges.
+     *
+     * For each loose point (indices 0..pointCount-1) and each boundary constraint:
+     * finds the closest point on the edge segment, and if the point is within
+     * collisionRadius applies a restitution impulse along the surface normal,
+     * distributed to the point and both edge endpoints weighted by (1-t) and t.
+     */
+    private function resolveEdgeCollisions(): void {
+        if (empty($this->constraints)) return;
+
+        $e      = $this->restitution;
+        $radius = $this->collisionRadius;
+
+        for ($i = 0; $i < $this->pointCount; $i++) {
+            if (!isset($this->points[$i])) continue;
+
+            $p  = $this->points[$i];
+            $px = $p->getX();
+            $py = $p->getY();
+            $vp = $p->getVelocity();
+            $mp = $p->getMass();
+
+            foreach ($this->constraints as $c) {
+                if (!$c->isBoundary()) continue;
+
+                $ea  = $c->getA();
+                $eb  = $c->getB();
+                $ax  = $ea->getX(); $ay = $ea->getY();
+                $bx  = $eb->getX(); $by = $eb->getY();
+
+                // Parametric closest point on segment AB
+                $abx = $bx - $ax; $aby = $by - $ay;
+                $ab2 = $abx * $abx + $aby * $aby;
+                if ($ab2 < 0.0001) continue; // degenerate edge
+
+                $apx = $px - $ax; $apy = $py - $ay;
+                $t   = max(0.0, min(1.0, ($apx * $abx + $apy * $aby) / $ab2));
+                $cpx = $ax + $t * $abx;
+                $cpy = $ay + $t * $aby;
+
+                $dx   = $px - $cpx;
+                $dy   = $py - $cpy;
+                $dist = sqrt($dx * $dx + $dy * $dy);
+
+                if ($dist >= $radius || $dist < 0.0001) continue;
+
+                // Normal pointing from edge toward point
+                $nx = $dx / $dist;
+                $ny = $dy / $dist;
+
+                // Edge contact velocity (interpolated between endpoints)
+                $va  = $ea->getVelocity();
+                $vb  = $eb->getVelocity();
+                $vcx = (1.0 - $t) * $va->x + $t * $vb->x;
+                $vcy = (1.0 - $t) * $va->y + $t * $vb->y;
+
+                // Relative velocity of point w.r.t. edge contact, along normal
+                $rvn = ($vp->x - $vcx) * $nx + ($vp->y - $vcy) * $ny;
+
+                // Only resolve if approaching
+                if ($rvn >= 0) continue;
+
+                // Effective inverse mass accounts for point + both edge endpoints
+                $ma         = $ea->getMass();
+                $mb         = $eb->getMass();
+                $invEffMass = 1.0 / $mp
+                            + (1.0 - $t) * (1.0 - $t) / $ma
+                            + $t * $t / $mb;
+
+                $J = -(1.0 + $e) * $rvn / $invEffMass;
+
+                // Apply impulse to loose point
+                $vp->x += ($J / $mp) * $nx;
+                $vp->y += ($J / $mp) * $ny;
+
+                // Distribute impulse to edge endpoints
+                $va->x -= ($J * (1.0 - $t) / $ma) * $nx;
+                $va->y -= ($J * (1.0 - $t) / $ma) * $ny;
+                $vb->x -= ($J * $t / $mb) * $nx;
+                $vb->y -= ($J * $t / $mb) * $ny;
+
+                // Positional correction — push point fully out of edge
+                $overlap = $radius - $dist;
+                $p->setCoords($px + $nx * $overlap, $py + $ny * $overlap);
+                // Refresh cached position for remaining edge checks this step
+                $px = $p->getX();
+                $py = $p->getY();
             }
         }
     }
@@ -434,8 +540,9 @@ class field {
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
             imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border * 1.5, $this->getYMax() - $border * 1.5, $white);
 
-            // Constraint edges (rigid body structure) — drawn under points
+            // Draw only boundary edges (skip internal diagonal braces)
             foreach ($this->constraints as $c) {
+                if (!$c->isBoundary()) continue;
                 imageline($gd,
                     (int)round($c->getA()->getX()), (int)round($c->getA()->getY()),
                     (int)round($c->getB()->getX()), (int)round($c->getB()->getY()),

@@ -174,6 +174,12 @@
                        oninput="document.getElementById('friction-val').textContent = parseFloat(this.value).toFixed(2)">
             </div>
 
+            <div class="control-row">
+                <label>Bounciness <span id="restitution-val">0.70</span></label>
+                <input type="range" id="restitution" min="0.00" max="1.00" step="0.05" value="0.70"
+                       oninput="document.getElementById('restitution-val').textContent = parseFloat(this.value).toFixed(2)">
+            </div>
+
             <div class="control-row" style="display:flex;align-items:center;gap:10px;font-size:13px;color:#ccc;">
                 <input type="checkbox" id="shapes" style="accent-color:#5bd565;width:16px;height:16px;cursor:pointer;">
                 <label for="shapes" style="cursor:pointer;">Spawn rigid bodies (boxes + circle)</label>
@@ -198,11 +204,12 @@
             var output = document.getElementById('output');
 
             var params = new URLSearchParams({
-                points:   document.getElementById('points').value,
-                steps:    document.getElementById('steps').value,
-                gravity:  document.getElementById('gravity').value,
-                friction: document.getElementById('friction').value,
-                shapes:   document.getElementById('shapes').checked ? '1' : '0',
+                points:      document.getElementById('points').value,
+                steps:       document.getElementById('steps').value,
+                gravity:     document.getElementById('gravity').value,
+                friction:    document.getElementById('friction').value,
+                restitution: document.getElementById('restitution').value,
+                shapes:      document.getElementById('shapes').checked ? '1' : '0',
             });
 
             // Remove old iframe / placeholder

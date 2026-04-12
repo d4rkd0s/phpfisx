@@ -79,3 +79,13 @@ it('exposes both endpoints and rest length', function () {
     expect($c->getB())->toBe($b);
     expect($c->getRestLength())->toBe(10.0);
 });
+
+it('isBoundary defaults to true and can be set to false', function () {
+    $field    = new phpfisx_field([0, 500, 0, 500]);
+    $a        = makePoint($field, 0.0, 0.0);
+    $b        = makePoint($field, 10.0, 0.0);
+    $boundary = new constraint($a, $b);
+    $internal = new constraint($a, $b, 10.0, false);
+    expect($boundary->isBoundary())->toBeTrue();
+    expect($internal->isBoundary())->toBeFalse();
+});
