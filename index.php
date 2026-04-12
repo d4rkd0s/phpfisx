@@ -174,6 +174,11 @@
                        oninput="document.getElementById('friction-val').textContent = parseFloat(this.value).toFixed(2)">
             </div>
 
+            <div class="control-row" style="display:flex;align-items:center;gap:10px;font-size:13px;color:#ccc;">
+                <input type="checkbox" id="shapes" style="accent-color:#5bd565;width:16px;height:16px;cursor:pointer;">
+                <label for="shapes" style="cursor:pointer;">Spawn rigid bodies (boxes + circle)</label>
+            </div>
+
             <button id="runbtn" onclick="run()">Run Simulation</button>
             <p class="status" id="status">Ready</p>
         </div>
@@ -197,6 +202,7 @@
                 steps:    document.getElementById('steps').value,
                 gravity:  document.getElementById('gravity').value,
                 friction: document.getElementById('friction').value,
+                shapes:   document.getElementById('shapes').checked ? '1' : '0',
             });
 
             // Remove old iframe / placeholder

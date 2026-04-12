@@ -9,6 +9,8 @@ class point {
     private $field;
     private vector $velocity;
     private float $mass;
+    private float $prevX = 0.0;
+    private float $prevY = 0.0;
 
     public function __construct(
         \phpfisx\areas\field $field,
@@ -128,6 +130,27 @@ class point {
         $friction = $this->field->getFriction();
         $this->velocity->x *= $friction;
         $this->velocity->y *= $friction;
+    }
+
+    /**
+     * savePreviousPosition — Snapshot position before constraint solving.
+     * Call this immediately before solveConstraints() each step.
+     */
+    public function savePreviousPosition(): void {
+        $this->prevX = $this->x;
+        $this->prevY = $this->y;
+    }
+
+    /**
+     * addConstraintVelocity — Feed constraint position corrections back into velocity.
+     *
+     * Any displacement caused by constraint solving would otherwise be "forgotten"
+     * next step. Adding the delta keeps rigid bodies moving coherently after bounces.
+     * Call this immediately after solveConstraints() each step.
+     */
+    public function addConstraintVelocity(): void {
+        $this->velocity->x += $this->x - $this->prevX;
+        $this->velocity->y += $this->y - $this->prevY;
     }
 
     public function checkCollisions($lines): bool {

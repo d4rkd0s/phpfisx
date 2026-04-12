@@ -3,6 +3,7 @@ namespace phpfisx\areas;
 
 use \phpfisx\entities\point as point;
 use \phpfisx\entities\line as line;
+use \phpfisx\entities\constraint as constraint;
 
 class field {
     private $TURBULENCE_LEVEL = 1000;
@@ -15,6 +16,8 @@ class field {
     private $valid = false;
     private $points = array();
     private $lines = array();
+    private array $constraints = [];
+    private array $shapeBlueprints = [];
     private $gravity;
     private float $friction;
     private float $collisionRadius;
@@ -132,8 +135,12 @@ class field {
     }
 
     private function turbulence($amount = 1) {
-        foreach ($this->points as $point) {
-            $point->applyForce(round(rand(0, $amount)), round(rand(1, $this->TURBULENCE_LEVEL)));
+        // Only apply to loose points (indices 0..pointCount-1).
+        // Rigid body corner points start at index $this->pointCount.
+        for ($i = 0; $i < $this->pointCount; $i++) {
+            if (isset($this->points[$i])) {
+                $this->points[$i]->applyForce(round(rand(0, $amount)), round(rand(1, $this->TURBULENCE_LEVEL)));
+            }
         }
     }
 
@@ -162,15 +169,20 @@ class field {
     private function persistToDisk() {
         $fp = fopen('field.json', 'w');
         fwrite($fp, json_encode([
-            "step"   => $this->getStep(),
-            "points" => array_map(fn($p) => $p->toArray(), $this->points),
-            "lines"  => $this->lines,
+            "step"        => $this->getStep(),
+            "points"      => array_map(fn($p) => $p->toArray(), $this->points),
+            "lines"       => $this->lines,
+            "constraints" => array_map(fn($c) => [
+                'a_id' => $c->getA()->getID(),
+                'b_id' => $c->getB()->getID(),
+                'rest' => $c->getRestLength(),
+            ], $this->constraints),
         ]));
         fclose($fp);
     }
 
     private function loadFromDisk() {
-        $disk = json_decode(file_get_contents('field.json'), true);
+        $disk   = json_decode(file_get_contents('field.json'), true);
         $points = [];
         foreach ($disk['points'] as $raw) {
             $points[] = new point(
@@ -184,6 +196,19 @@ class field {
             );
         }
         $this->points = $points;
+
+        // Rebuild constraints from serialized topology using point IDs
+        $pointMap = [];
+        foreach ($this->points as $p) {
+            $pointMap[$p->getID()] = $p;
+        }
+        $this->constraints = [];
+        foreach ($disk['constraints'] ?? [] as $rc) {
+            if (isset($pointMap[$rc['a_id']], $pointMap[$rc['b_id']])) {
+                $this->constraints[] = new constraint($pointMap[$rc['a_id']], $pointMap[$rc['b_id']], $rc['rest']);
+            }
+        }
+
         $lines = [];
         foreach ($disk['lines'] as $raw) {
             $lines[] = new line($this, 0, $raw['id'], $raw['start_x'], $raw['start_y'], $raw['end_x'], $raw['end_y']);
@@ -191,12 +216,121 @@ class field {
         $this->lines = $lines;
     }
 
+    // -------------------------------------------------------------------------
+    // Rigid bodies — blueprint registration and materialization
+    // -------------------------------------------------------------------------
+
+    /**
+     * Register a box to be spawned at simulation start.
+     * Call before visualize(). The box is materialized on step 1.
+     */
+    public function spawnBox(float $cx, float $cy, float $w, float $h, float $mass = 1.0): void {
+        $this->shapeBlueprints[] = [
+            'type' => 'box', 'cx' => $cx, 'cy' => $cy,
+            'w'    => $w,    'h'  => $h,  'mass' => $mass,
+        ];
+    }
+
+    /**
+     * Register a circle (polygon approximation) to be spawned at simulation start.
+     */
+    public function spawnCircle(float $cx, float $cy, float $r, int $n = 8, float $mass = 1.0): void {
+        $this->shapeBlueprints[] = [
+            'type' => 'circle', 'cx' => $cx, 'cy' => $cy,
+            'r'    => $r,       'n'  => $n,  'mass' => $mass,
+        ];
+    }
+
+    private function materializeShapes(): void {
+        $this->constraints = [];
+        foreach ($this->shapeBlueprints as $bp) {
+            match ($bp['type']) {
+                'box'    => $this->materializeBox($bp['cx'], $bp['cy'], $bp['w'], $bp['h'], $bp['mass']),
+                'circle' => $this->materializeCircle($bp['cx'], $bp['cy'], $bp['r'], $bp['n'], $bp['mass']),
+            };
+        }
+    }
+
+    private function materializeBox(float $cx, float $cy, float $w, float $h, float $mass): void {
+        $hw = $w / 2.0;
+        $hh = $h / 2.0;
+
+        $a = $this->makePoint($cx - $hw, $cy - $hh, $mass); // top-left
+        $b = $this->makePoint($cx + $hw, $cy - $hh, $mass); // top-right
+        $c = $this->makePoint($cx - $hw, $cy + $hh, $mass); // bottom-left
+        $d = $this->makePoint($cx + $hw, $cy + $hh, $mass); // bottom-right
+
+        // Edges (4) + diagonals (2) to prevent shear
+        $this->constraints[] = new constraint($a, $b);
+        $this->constraints[] = new constraint($c, $d);
+        $this->constraints[] = new constraint($a, $c);
+        $this->constraints[] = new constraint($b, $d);
+        $this->constraints[] = new constraint($a, $d);
+        $this->constraints[] = new constraint($b, $c);
+    }
+
+    private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass): void {
+        $pts = [];
+        for ($i = 0; $i < $n; $i++) {
+            $angle = (2.0 * M_PI * $i) / $n;
+            $pts[] = $this->makePoint($cx + $r * cos($angle), $cy + $r * sin($angle), $mass);
+        }
+
+        // Ring constraints between adjacent perimeter points
+        for ($i = 0; $i < $n; $i++) {
+            $this->constraints[] = new constraint($pts[$i], $pts[($i + 1) % $n]);
+        }
+
+        // Cross constraints (diameters) for rigidity
+        $half = (int)($n / 2);
+        for ($i = 0; $i < $half; $i++) {
+            $this->constraints[] = new constraint($pts[$i], $pts[$i + $half]);
+        }
+    }
+
+    /** Create a point, add it to the field, and return it. */
+    private function makePoint(float $x, float $y, float $mass = 1.0): point {
+        $p = new point($this, 0, $this->newUuid(), $x, $y);
+        $p->setMass($mass);
+        $this->points[] = $p;
+        return $p;
+    }
+
+    private function newUuid(): string {
+        return bin2hex(random_bytes(8));
+    }
+
+    // -------------------------------------------------------------------------
+    // Constraint solving
+    // -------------------------------------------------------------------------
+
+    /**
+     * Run constraint iterations after each integration step.
+     * More iterations = stiffer shapes, more CPU cost.
+     */
+    private function solveConstraints(int $iterations = 5): void {
+        for ($i = 0; $i < $iterations; $i++) {
+            foreach ($this->constraints as $c) {
+                $c->solve();
+            }
+        }
+    }
+
     public function runFisx() {
-        $this->turbulence();
-        $this->applyGravity();
+        $this->turbulence();       // loose points only (see below)
+        $this->applyGravity();     // all points
         $this->resolvePointCollisions();
         foreach ($this->points as $point) {
             $point->integrate();
+        }
+        if (!empty($this->constraints)) {
+            foreach ($this->points as $point) {
+                $point->savePreviousPosition();
+            }
+            $this->solveConstraints();
+            foreach ($this->points as $point) {
+                $point->addConstraintVelocity();
+            }
         }
     }
 
@@ -265,8 +399,8 @@ class field {
         if($this->getStep() === 1 || $this->getStep() === 0) {
             $this->resetDisk();
             $this->generatePoints();
-            // $this->generateLines();
-        } 
+            $this->materializeShapes();
+        }
         // if the step is n and n-1 = last step, then load points from file
         else if($this->getStep()-1 === $this->getLastStep()) {
             $this->loadFromDisk();
@@ -295,9 +429,19 @@ class field {
             $white = imagecolorallocate($gd, 255, 255, 255);
             $gray  = imagecolorallocate($gd, 245, 245, 245);
             $black = imagecolorallocate($gd, 0, 0, 0);
+            $blue  = imagecolorallocate($gd, 30, 80, 200);
 
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
             imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border * 1.5, $this->getYMax() - $border * 1.5, $white);
+
+            // Constraint edges (rigid body structure) — drawn under points
+            foreach ($this->constraints as $c) {
+                imageline($gd,
+                    (int)round($c->getA()->getX()), (int)round($c->getA()->getY()),
+                    (int)round($c->getB()->getX()), (int)round($c->getB()->getY()),
+                    $blue
+                );
+            }
 
             foreach ($this->points as $point) {
                 $px = round($point->getX());
