@@ -100,6 +100,10 @@ class point {
         }
 
         $this->setCoords($new_x, $new_y);
+
+        $friction = $this->field->getFriction();
+        $this->velocity->x *= $friction;
+        $this->velocity->y *= $friction;
     }
 
     public function checkCollisions($lines): bool {

@@ -86,6 +86,34 @@ it('setVelocity updates both components', function () {
     expect($point->getVelocity()->y)->toBe(-3.2);
 });
 
+it('friction damps velocity each step', function () {
+    $field = new phpfisx_field([0, 500, 0, 500], 0, 4, 0.5); // gravity=0, friction=0.5
+    $point = new point($field, 0, 'test', 250.0, 250.0, 10.0, 0.0); // vx=10
+    $point->integrate();
+    expect($point->getVelocity()->x)->toBe(5.0); // 10 * 0.5
+});
+
+it('friction=1 preserves velocity', function () {
+    $field = new phpfisx_field([0, 500, 0, 500], 0, 4, 1.0); // no drag
+    $point = new point($field, 0, 'test', 250.0, 250.0, 4.0, 0.0);
+    $point->integrate();
+    expect($point->getVelocity()->x)->toBe(4.0);
+});
+
+it('friction prevents unbounded velocity growth', function () {
+    // Without friction, after 300 steps of gravity=1, vy would be 300.
+    // With friction=0.98, terminal velocity = 1 / (1 - 0.98) = 50.
+    // Use a field tall enough that the point never hits the floor.
+    $field = new phpfisx_field([0, 100000, 0, 100000], 1, 4, 0.98);
+    $point = new point($field, 0, 'test', 50000.0, 100.0);
+    for ($i = 0; $i < 300; $i++) {
+        $point->applyForce(1, 0);
+        $point->integrate();
+    }
+    // vy must be well below the frictionless value of 300
+    expect(abs($point->getVelocity()->y))->toBeLessThan(100.0);
+});
+
 it('toArray includes velocity components', function () {
     $field = new phpfisx_field([0, 500, 0, 500]);
     $point = new point($field, 0, 'test-id', 100.0, 200.0, 1.5, 2.5);

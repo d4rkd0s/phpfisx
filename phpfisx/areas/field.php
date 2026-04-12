@@ -16,6 +16,7 @@ class field {
     private $points = array();
     private $lines = array();
     private $gravity;
+    private float $friction;
 
     private $step;
     private $steps;
@@ -24,12 +25,20 @@ class field {
 
     private $pointCount;
 
-    public function __construct($bounds, $gravity = 1, $border = 4) {
+    /**
+     * @param array $bounds   [x_min, x_max, y_min, y_max]
+     * @param int   $gravity  Downward acceleration added to velocity per step
+     * @param int   $border   Wall thickness in pixels
+     * @param float $friction Velocity multiplier per step (0–1). 1 = no drag, 0 = instant stop.
+     *                        Default 0.98 gives a terminal velocity of ~50px/step under gravity=1.
+     */
+    public function __construct($bounds, $gravity = 1, $border = 4, float $friction = 0.98) {
         $this->x_min = $bounds[0];
         $this->x_max = $bounds[1];
         $this->y_min = $bounds[2];
         $this->y_max = $bounds[3];
         $this->border = $border;
+        $this->friction = $friction;
         $this->ensureFieldSpace();
         $this->setGravity($gravity);
     }
@@ -44,6 +53,10 @@ class field {
 
     public function getBorder() {
         return $this->border;
+    }
+
+    public function getFriction(): float {
+        return $this->friction;
     }
 
     private function setGravity($gravity) {
