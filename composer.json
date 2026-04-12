@@ -2,14 +2,15 @@
     "name": "d4rkd0s/phpfisx",
     "config": {
         "platform": {
-            "php": "8.0"
+            "php": "8.1"
         },
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
     },
     "require": {
-        "sybio/gif-creator": "^1.0"
+        "php": ">=8.1",
+        "ext-gd": "*"
     },
     "require-dev": {
         "pestphp/pest": "^1.21"

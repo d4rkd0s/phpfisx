@@ -223,55 +223,120 @@ class field {
     }
 
     public function visualize() {
-        $frames = array();
-        $durations = array();
-        for ($step=1; $step <= $this->steps; $step++) { 
+        $border = 2;
+        $frames = [];
+
+        for ($step = 1; $step <= $this->steps; $step++) {
             $this->setStep($step);
             $this->calculate();
-            $gd = imagecreatetruecolor($this->x_max, $this->y_max);
-            $border = 2;
+
+            $gd    = imagecreatetruecolor($this->x_max, $this->y_max);
             $white = imagecolorallocate($gd, 255, 255, 255);
-            $gray = imagecolorallocate($gd, 245, 245, 245);
+            $gray  = imagecolorallocate($gd, 245, 245, 245);
             $black = imagecolorallocate($gd, 0, 0, 0);
-            $red = imagecolorallocate($gd, 255, 0, 0);
-            $green = imagecolorallocate($gd, 0, 255, 0);
-            $blue = imagecolorallocate($gd, 0, 0, 255);
-            // Set frame
+
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
-            // Set background
-            imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border*1.5, $this->getYMax() - $border*1.5, $white);
-            # Fill in points
+            imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border * 1.5, $this->getYMax() - $border * 1.5, $white);
+
             foreach ($this->points as $point) {
-                $pointx = round($point->getX());
-                $pointy = round($point->getY());
-                imagesetpixel($gd, $pointx, $pointy-1, $black);
-                imagesetpixel($gd, $pointx-1, $pointy, $black);
-                imagesetpixel($gd, $pointx, $pointy, $black);
-                imagesetpixel($gd, $pointx+1, $pointy, $black);
-                imagesetpixel($gd, $pointx, $pointy+1, $black);
+                $px = round($point->getX());
+                $py = round($point->getY());
+                imagesetpixel($gd, $px,     $py - 1, $black);
+                imagesetpixel($gd, $px - 1, $py,     $black);
+                imagesetpixel($gd, $px,     $py,     $black);
+                imagesetpixel($gd, $px + 1, $py,     $black);
+                imagesetpixel($gd, $px,     $py + 1, $black);
             }
-            # Fill in lines
+
             foreach ($this->lines as $line) {
                 imageline($gd, $line->getStartX(), $line->getStartY(), $line->getEndX(), $line->getEndY(), $black);
             }
-            // Set text background
-            imagefilledrectangle($gd, $border+1, $border+1, round(60+strlen(strval($this->step))), 20, $gray);
-            // Set details
-            imagestring($gd, 4, 4, 4, 'time ' . $step, $black);
-            
-            // header('Content-Type: image/png');
-            array_push($frames, "images/image" . strval($step) . ".png");
-            array_push($durations, 1);
-            imagepng($gd, "images/image" . strval($step) . ".png", 0, 0);
+
+            imagefilledrectangle($gd, $border + 1, $border + 1, round(60 + strlen((string)$step)), 20, $gray);
+            imagestring($gd, 4, 4, 4, 'step ' . $step, $black);
+
+            ob_start();
+            imagepng($gd);
+            $frames[] = base64_encode(ob_get_clean());
+            imagedestroy($gd);
         }
 
+        header('Content-Type: text/html; charset=utf-8');
+        echo $this->renderAnimation($frames);
+    }
 
-        $gc = new \GifCreator\GifCreator();
-        $gc->create($frames, $durations, 0);
-        header('Content-type: image/gif');
-        header('Content-Disposition: filename="render.gif"');
-        $gifBinary = $gc->getGif();
-        echo $gifBinary;
+    private function renderAnimation(array $frames): string {
+        $framesJson = json_encode($frames);
+        $total      = count($frames);
+        return <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; display: flex; flex-direction: column; align-items: center; }
+  canvas { display: block; image-rendering: pixelated; width: 100%; max-width: 500px; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font: 12px monospace; width: 100%; max-width: 500px; }
+  .bar span { min-width: 60px; color: #555; }
+  input[type=range] { flex: 1; accent-color: #333; }
+  button { padding: 2px 10px; font: 12px monospace; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="c" width="500" height="500"></canvas>
+<div class="bar">
+  <button id="btn">⏸</button>
+  <input type="range" id="scrub" min="0" max="{$total}" value="0" step="1">
+  <span id="lbl">step 1 / {$total}</span>
+</div>
+<script>
+(function() {
+  var frames = {$framesJson};
+  var total  = frames.length;
+  var canvas = document.getElementById('c');
+  var ctx    = canvas.getContext('2d');
+  var scrub  = document.getElementById('scrub');
+  var lbl    = document.getElementById('lbl');
+  var btn    = document.getElementById('btn');
+  var cur    = 0;
+  var playing = true;
+  var timer;
+
+  function draw(i) {
+    var img = new Image();
+    img.onload = function() { ctx.drawImage(img, 0, 0, 500, 500); };
+    img.src = 'data:image/png;base64,' + frames[i];
+    scrub.value = i;
+    lbl.textContent = 'step ' + (i + 1) + ' / ' + total;
+  }
+
+  function tick() {
+    draw(cur);
+    cur = (cur + 1) % total;
+  }
+
+  function startLoop() { timer = setInterval(tick, 80); }
+  function stopLoop()  { clearInterval(timer); }
+
+  scrub.addEventListener('input', function() {
+    cur = parseInt(this.value);
+    draw(cur);
+  });
+
+  btn.addEventListener('click', function() {
+    playing = !playing;
+    btn.textContent = playing ? '⏸' : '▶';
+    playing ? startLoop() : stopLoop();
+  });
+
+  draw(0);
+  startLoop();
+})();
+</script>
+</body>
+</html>
+HTML;
     }
 
 }
