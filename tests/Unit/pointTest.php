@@ -86,6 +86,44 @@ it('setVelocity updates both components', function () {
     expect($point->getVelocity()->y)->toBe(-3.2);
 });
 
+it('defaults to mass 1', function () {
+    $field = new phpfisx_field([0, 500, 0, 500]);
+    $point = new point($field, 42);
+    expect($point->getMass())->toBe(1.0);
+});
+
+it('setMass updates mass', function () {
+    $field = new phpfisx_field([0, 500, 0, 500]);
+    $point = new point($field, 0, 'test', 250.0, 250.0);
+    $point->setMass(5.0);
+    expect($point->getMass())->toBe(5.0);
+});
+
+it('setMass clamps to minimum', function () {
+    $field = new phpfisx_field([0, 500, 0, 500]);
+    $point = new point($field, 0, 'test', 250.0, 250.0);
+    $point->setMass(0.0);
+    expect($point->getMass())->toBeGreaterThan(0.0);
+});
+
+it('heavier point accelerates slower under same force', function () {
+    $field  = new phpfisx_field([0, 500, 0, 500]);
+    $light  = new point($field, 0, 'light', 250.0, 250.0);
+    $heavy  = new point($field, 0, 'heavy', 250.0, 250.0);
+    $heavy->setMass(5.0);
+    $light->applyForce(1, 0);
+    $heavy->applyForce(1, 0);
+    expect($light->getVelocity()->y)->toBeGreaterThan($heavy->getVelocity()->y);
+});
+
+it('toArray includes mass', function () {
+    $field = new phpfisx_field([0, 500, 0, 500]);
+    $point = new point($field, 0, 'test', 100.0, 200.0, 0.0, 0.0, 3.0);
+    $arr   = $point->toArray();
+    expect($arr)->toHaveKey('mass');
+    expect($arr['mass'])->toBe(3.0);
+});
+
 it('friction damps velocity each step', function () {
     $field = new phpfisx_field([0, 500, 0, 500], 0, 4, 0.5); // gravity=0, friction=0.5
     $point = new point($field, 0, 'test', 250.0, 250.0, 10.0, 0.0); // vx=10

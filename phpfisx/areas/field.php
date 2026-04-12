@@ -17,6 +17,7 @@ class field {
     private $lines = array();
     private $gravity;
     private float $friction;
+    private float $collisionRadius;
 
     private $step;
     private $steps;
@@ -29,16 +30,18 @@ class field {
      * @param array $bounds   [x_min, x_max, y_min, y_max]
      * @param int   $gravity  Downward acceleration added to velocity per step
      * @param int   $border   Wall thickness in pixels
-     * @param float $friction Velocity multiplier per step (0–1). 1 = no drag, 0 = instant stop.
-     *                        Default 0.98 gives a terminal velocity of ~50px/step under gravity=1.
+     * @param float $friction        Velocity multiplier per step (0–1). 1 = no drag, 0 = instant stop.
+     *                               Default 0.98 gives a terminal velocity of ~50px/step under gravity=1.
+     * @param float $collisionRadius Minimum distance (px) before two points are treated as colliding.
      */
-    public function __construct($bounds, $gravity = 1, $border = 4, float $friction = 0.98) {
-        $this->x_min = $bounds[0];
-        $this->x_max = $bounds[1];
-        $this->y_min = $bounds[2];
-        $this->y_max = $bounds[3];
-        $this->border = $border;
-        $this->friction = $friction;
+    public function __construct($bounds, $gravity = 1, $border = 4, float $friction = 0.98, float $collisionRadius = 5.0) {
+        $this->x_min          = $bounds[0];
+        $this->x_max          = $bounds[1];
+        $this->y_min          = $bounds[2];
+        $this->y_max          = $bounds[3];
+        $this->border         = $border;
+        $this->friction       = $friction;
+        $this->collisionRadius = $collisionRadius;
         $this->ensureFieldSpace();
         $this->setGravity($gravity);
     }
@@ -175,8 +178,9 @@ class field {
                 $raw['id'],
                 $raw['x'],
                 $raw['y'],
-                $raw['vx'] ?? 0.0,
-                $raw['vy'] ?? 0.0
+                $raw['vx']   ?? 0.0,
+                $raw['vy']   ?? 0.0,
+                $raw['mass'] ?? 1.0
             );
         }
         $this->points = $points;
@@ -190,9 +194,66 @@ class field {
     public function runFisx() {
         $this->turbulence();
         $this->applyGravity();
-        $this->checkCollisions();
+        $this->resolvePointCollisions();
         foreach ($this->points as $point) {
             $point->integrate();
+        }
+    }
+
+    /**
+     * resolvePointCollisions — Elastic impulse response for overlapping point pairs.
+     *
+     * For every pair (i, j): if their distance is less than collisionRadius,
+     * apply a mass-weighted impulse along the collision normal and push them apart.
+     * Complexity is O(n²) — fine for hundreds of points; spatial hashing would be
+     * needed for thousands.
+     */
+    private function resolvePointCollisions(): void {
+        $n      = count($this->points);
+        $radius = $this->collisionRadius;
+
+        for ($i = 0; $i < $n - 1; $i++) {
+            for ($j = $i + 1; $j < $n; $j++) {
+                $a = $this->points[$i];
+                $b = $this->points[$j];
+
+                $dx = $a->getX() - $b->getX();
+                $dy = $a->getY() - $b->getY();
+                $dist = sqrt($dx * $dx + $dy * $dy);
+
+                if ($dist >= $radius || $dist < 0.0001) {
+                    continue;
+                }
+
+                // Collision normal (unit vector from b → a)
+                $nx = $dx / $dist;
+                $ny = $dy / $dist;
+
+                // Relative velocity along normal
+                $va  = $a->getVelocity();
+                $vb  = $b->getVelocity();
+                $rvn = ($va->x - $vb->x) * $nx + ($va->y - $vb->y) * $ny;
+
+                // Only resolve if points are approaching
+                if ($rvn >= 0) {
+                    continue;
+                }
+
+                // Elastic impulse: J = -2 * rvn / (1/ma + 1/mb)
+                $ma = $a->getMass();
+                $mb = $b->getMass();
+                $J  = -2.0 * $rvn / (1.0 / $ma + 1.0 / $mb);
+
+                $va->x += ($J / $ma) * $nx;
+                $va->y += ($J / $ma) * $ny;
+                $vb->x -= ($J / $mb) * $nx;
+                $vb->y -= ($J / $mb) * $ny;
+
+                // Positional correction — push apart to eliminate overlap
+                $overlap = ($radius - $dist) / 2.0;
+                $a->setCoords($a->getX() + $nx * $overlap, $a->getY() + $ny * $overlap);
+                $b->setCoords($b->getX() - $nx * $overlap, $b->getY() - $ny * $overlap);
+            }
         }
     }
 

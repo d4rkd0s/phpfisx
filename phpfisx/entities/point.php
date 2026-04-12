@@ -8,6 +8,7 @@ class point {
     public $z;
     private $field;
     private vector $velocity;
+    private float $mass;
 
     public function __construct(
         \phpfisx\areas\field $field,
@@ -16,10 +17,12 @@ class point {
         float $existing_x = 0.0,
         float $existing_y = 0.0,
         float $existing_vx = 0.0,
-        float $existing_vy = 0.0
+        float $existing_vy = 0.0,
+        float $existing_mass = 1.0
     ) {
-        $this->field = $field;
+        $this->field    = $field;
         $this->velocity = new vector(0, 0);
+        $this->mass     = max(0.001, $existing_mass);
 
         if ($seed !== 0) {
             $this->id = $this->uuid();
@@ -33,6 +36,14 @@ class point {
             $this->setCoords($existing_x, $existing_y);
             $this->velocity = new vector($existing_vx, $existing_vy);
         }
+    }
+
+    public function getMass(): float {
+        return $this->mass;
+    }
+
+    public function setMass(float $mass): void {
+        $this->mass = max(0.001, $mass);
     }
 
     private function uuid(): string {
@@ -63,9 +74,22 @@ class point {
      * @param float $amount   Force magnitude
      * @param int   $direction Direction in degrees (0–360)
      */
+    /**
+     * applyForce — Accumulates a force into this point's velocity.
+     *
+     * Forces are expressed as a magnitude and a direction in degrees.
+     * Direction 0 = downward (positive Y), 90 = rightward (positive X).
+     * Acceleration = F / mass (Newton's second law).
+     * Velocity is applied to position each step via integrate().
+     *
+     * @param float $amount    Force magnitude
+     * @param int   $direction Direction in degrees (0–360)
+     */
     public function applyForce(float $amount, int $direction): void {
-        $this->velocity->x += $amount * sin(deg2rad($direction));
-        $this->velocity->y += $amount * cos(deg2rad($direction));
+        $ax = ($amount / $this->mass) * sin(deg2rad($direction));
+        $ay = ($amount / $this->mass) * cos(deg2rad($direction));
+        $this->velocity->x += $ax;
+        $this->velocity->y += $ay;
     }
 
     /**
@@ -142,11 +166,12 @@ class point {
      */
     public function toArray(): array {
         return [
-            'id' => $this->id,
-            'x'  => $this->x,
-            'y'  => $this->y,
-            'vx' => $this->velocity->x,
-            'vy' => $this->velocity->y,
+            'id'   => $this->id,
+            'x'    => $this->x,
+            'y'    => $this->y,
+            'vx'   => $this->velocity->x,
+            'vy'   => $this->velocity->y,
+            'mass' => $this->mass,
         ];
     }
 }
