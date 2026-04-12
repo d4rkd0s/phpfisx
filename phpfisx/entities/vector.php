@@ -29,8 +29,9 @@ class vector {
      * @return mixed
      */
     public function rotate($angle){
-        $this->x = $this->x * cos($angle) - $this->y * sin($angle);
-        $this->y = $this->x * sin($angle) + $this->y * cos($angle);
+        $x = $this->x;
+        $this->x = $x * cos($angle) - $this->y * sin($angle);
+        $this->y = $x * sin($angle) + $this->y * cos($angle);
         return $this;
     }
     /**
@@ -161,5 +162,13 @@ class vector {
      */
     public function len2(){
         return $this->dot($this);
+    }
+
+    /**
+     * Return a new vector with the same x and y values.
+     * @return vector
+     */
+    public function copy(): vector {
+        return new vector($this->x, $this->y);
     }
 }

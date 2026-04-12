@@ -1,15 +1,40 @@
 name: CI
 
-on: ['push']
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
 
 jobs:
-  build-test:
+  test:
+    name: PHP ${{ matrix.php }} tests
     runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v2.3.4
-    - uses: php-actions/composer@v5
-    - uses: NWBY/pest-action@v1.2.0
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.1", "8.2", "8.3"]
 
-    # `--do-not-cache-result` is to avoid: file_put_contents(/home/runner/work/phpfisx/phpfisx/.phpunit.result.cache): Failed to open stream: Permission denied 8 Error: Process completed with exit code 2.
-    - run: ./vendor/bin/pest --do-not-cache-result
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, mbstring
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run test suite
+        run: ./vendor/bin/pest --colors=always

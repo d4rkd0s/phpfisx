@@ -7,10 +7,21 @@ class point {
     public $y;
     public $z;
     private $field;
+    private vector $velocity;
 
-    public function __construct(\phpfisx\areas\field $field, int $seed = 0, string $existing_id = "", int $existing_x = 0, int $existing_y = 0) {
+    public function __construct(
+        \phpfisx\areas\field $field,
+        int $seed = 0,
+        string $existing_id = "",
+        float $existing_x = 0.0,
+        float $existing_y = 0.0,
+        float $existing_vx = 0.0,
+        float $existing_vy = 0.0
+    ) {
         $this->field = $field;
-        if($seed !== 0) {
+        $this->velocity = new vector(0, 0);
+
+        if ($seed !== 0) {
             $this->id = $this->uuid();
             srand($seed);
             $this->setCoords(
@@ -20,10 +31,11 @@ class point {
         } else {
             $this->id = $existing_id;
             $this->setCoords($existing_x, $existing_y);
+            $this->velocity = new vector($existing_vx, $existing_vy);
         }
     }
 
-    private function uuid() {
+    private function uuid(): string {
         return sprintf('%s-%s-%s-%s',
             bin2hex(random_bytes(4)),
             bin2hex(random_bytes(4)),
@@ -32,91 +44,105 @@ class point {
         );
     }
 
-    public function getVelocity() {
-
+    public function getVelocity(): vector {
+        return $this->velocity;
     }
 
-    public function setVelocity() {
-        
+    public function setVelocity(float $vx, float $vy): void {
+        $this->velocity->x = $vx;
+        $this->velocity->y = $vy;
     }
 
     /**
-     * applyForce - Applies force to the point
+     * applyForce — Accumulates a force into this point's velocity.
      *
-     * @param integer $amount - Any number, indicates the "amount" of force to apply, no units yet
-     * @param integer $direction - Direction from 0-360 to apply the force from
-     * @param integer $step - The current fisx step
-     * @return void
+     * Forces are expressed as a magnitude and a direction in degrees.
+     * Direction 0 = downward (positive Y), 90 = rightward (positive X).
+     * Velocity is applied to position each step via integrate().
+     *
+     * @param float $amount   Force magnitude
+     * @param int   $direction Direction in degrees (0–360)
      */
-    public function applyForce(int $amount, int $direction, int $step) {
-        $new_x = $this->getX();
-        $new_y = $this->getY();
-        for ($i=0; $i < $step; $i++) {
-            // Calculate X,Y from Cos/Sin
-            $new_x = $new_x + ($amount * (sin(deg2rad($direction))));
-            $new_y = $new_y + ($amount * (cos(deg2rad($direction))));
-            // Calculate distance between start/end for sanity check
-            $distance = sqrt(pow($new_x - $this->getX(), 2) + pow($new_y - $this->getY(), 2));
-            // Set end states
-            $final_x = $new_x;
-            $final_y = $new_y;
-            // Set border
-            // if x is pos out of bounds, limit x to max bounds
-            if($new_x > $this->field->getXMax()) {
-                $final_x = $this->field->getXMax() - $this->field->getBorder();
-            }
-            // if y is pos out of bounds, limit y to max bounds
-            if($new_y > $this->field->getYMax()) {
-                $final_y = $this->field->getYMax() - $this->field->getBorder();
-            }
-            // if x is neg out of bounds, limit x to min bounds
-            if($new_x < 0) {
-                $final_x = 0 + $this->field->getBorder();
-            }
-            // if y is neg out of bounds, limit y to min bounds
-            if($new_y < 0) {
-                $final_y = 0 + $this->field->getBorder();
-            }
-        }
-        // Check distance traveled matches distance requested
-        if (round($distance, 2) === round($amount * $step, 2)) {
-            // Set new position of point
-            $this->setCoords($final_x, $final_y);
-        } else {
-            throw new \Exception("Invalid vector movement");
-        }
+    public function applyForce(float $amount, int $direction): void {
+        $this->velocity->x += $amount * sin(deg2rad($direction));
+        $this->velocity->y += $amount * cos(deg2rad($direction));
     }
 
-    public function checkCollisions($lines) {
-        foreach($lines as $line) {
-            $point_x = $this->getX();
-            $point_y = $this->getY();
-            // Check if point is on the line
-            if($line->isOnLine($point_x, $point_y)) {
+    /**
+     * integrate — Advances position by the current velocity.
+     *
+     * When a boundary is hit, the relevant velocity component is reversed
+     * so the point bounces. Call this once per simulation step, after all
+     * forces have been applied.
+     */
+    public function integrate(): void {
+        $new_x = $this->x + $this->velocity->x;
+        $new_y = $this->y + $this->velocity->y;
+
+        $border = $this->field->getBorder();
+        $x_max  = $this->field->getXMax() - $border;
+        $y_max  = $this->field->getYMax() - $border;
+
+        if ($new_x >= $x_max) {
+            $new_x = $x_max;
+            $this->velocity->x *= -1;
+        } elseif ($new_x <= $border) {
+            $new_x = $border;
+            $this->velocity->x *= -1;
+        }
+
+        if ($new_y >= $y_max) {
+            $new_y = $y_max;
+            $this->velocity->y *= -1;
+        } elseif ($new_y <= $border) {
+            $new_y = $border;
+            $this->velocity->y *= -1;
+        }
+
+        $this->setCoords($new_x, $new_y);
+    }
+
+    public function checkCollisions($lines): bool {
+        foreach ($lines as $line) {
+            if ($line->isOnLine($this->getX(), $this->getY())) {
                 return true;
             }
         }
         return false;
     }
 
-    public function setCoords($x, $y) {
+    public function setCoords($x, $y): void {
         $this->x = $x;
         $this->y = $y;
     }
 
-    public function getCoords() {
-        return array($this->x, $this->y);
+    public function getCoords(): array {
+        return [$this->x, $this->y];
     }
 
-    public function getX() {
+    public function getX(): float {
         return $this->x;
     }
 
-    public function getY() {
+    public function getY(): float {
         return $this->y;
     }
 
-    public function getID() {
+    public function getID(): string {
         return $this->id;
+    }
+
+    /**
+     * toArray — Serializes the point state including velocity.
+     * Used by field::persistToDisk() for clean round-trip saves.
+     */
+    public function toArray(): array {
+        return [
+            'id' => $this->id,
+            'x'  => $this->x,
+            'y'  => $this->y,
+            'vx' => $this->velocity->x,
+            'vy' => $this->velocity->y,
+        ];
     }
 }

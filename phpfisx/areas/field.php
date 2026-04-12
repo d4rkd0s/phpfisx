@@ -106,12 +106,10 @@ class field {
     }
 
     private function applyForces(array $forces) {
-        // Run physics on each point
         foreach ($this->points as $point) {
-            // Random Light Force
-            foreach($forces as $force) {
-                if(in_array($this->step, $force['steps'])){
-                    $point->applyForce($force['amount'], $force['direction'], $this->getStep());
+            foreach ($forces as $force) {
+                if (in_array($this->step, $force['steps'])) {
+                    $point->applyForce($force['amount'], $force['direction']);
                 }
             }
         }
@@ -119,14 +117,13 @@ class field {
 
     private function turbulence($amount = 1) {
         foreach ($this->points as $point) {
-            $point->applyForce(round(rand(0,$amount)), round(rand(1,$this->TURBULENCE_LEVEL)), $this->getStep());
+            $point->applyForce(round(rand(0, $amount)), round(rand(1, $this->TURBULENCE_LEVEL)));
         }
     }
 
     private function applyGravity() {
         foreach ($this->points as $point) {
-            // $this->getGravity()*($this->step*$this->getGravity())
-            $point->applyForce($this->getGravity(), round(0), $this->getStep());
+            $point->applyForce($this->getGravity(), 0);
         }
     }
 
@@ -148,42 +145,42 @@ class field {
 
     private function persistToDisk() {
         $fp = fopen('field.json', 'w');
-        fwrite($fp, json_encode(array(
-            "step" => $this->getStep(),
-            "points" => $this->points,
-            "lines" => $this->lines
-        )));
+        fwrite($fp, json_encode([
+            "step"   => $this->getStep(),
+            "points" => array_map(fn($p) => $p->toArray(), $this->points),
+            "lines"  => $this->lines,
+        ]));
         fclose($fp);
     }
 
     private function loadFromDisk() {
         $disk = json_decode(file_get_contents('field.json'), true);
-        $points = array();
-        foreach ($disk['points'] as $raw_point) {
-            array_push($points, new point($this, 0, $raw_point['id'], $raw_point['x'], $raw_point['y']));
+        $points = [];
+        foreach ($disk['points'] as $raw) {
+            $points[] = new point(
+                $this, 0,
+                $raw['id'],
+                $raw['x'],
+                $raw['y'],
+                $raw['vx'] ?? 0.0,
+                $raw['vy'] ?? 0.0
+            );
         }
         $this->points = $points;
-        $lines = array();
-        foreach ($disk['lines'] as $raw_line) {
-            array_push($lines, new line($this, 0, $raw_line['id'], $raw_line['start_x'], $raw_line['start_y'], $raw_line['end_x'], $raw_line['end_y']));
+        $lines = [];
+        foreach ($disk['lines'] as $raw) {
+            $lines[] = new line($this, 0, $raw['id'], $raw['start_x'], $raw['start_y'], $raw['end_x'], $raw['end_y']);
         }
         $this->lines = $lines;
     }
 
     public function runFisx() {
-        // $forces = array(
-        //     [
-        //         "ids"=>"all",
-        //         "force"=>"linear",
-        //         "direction"=>90,
-        //         "amount"=>1,
-        //         "steps"=>[1,2,3,7,8,9,13,14,15,19,20,21,25]
-        //     ]
-        // );
-        // $this->applyForces($forces);
-        $this->turbulence(); 
+        $this->turbulence();
         $this->applyGravity();
         $this->checkCollisions();
+        foreach ($this->points as $point) {
+            $point->integrate();
+        }
     }
 
     public function calculate() {
