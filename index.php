@@ -171,6 +171,29 @@
             line-height: 1.8;
         }
         .info strong { color: #888; }
+
+        /* ── Property panel (selected shape) ── */
+        #prop-panel {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid #2e2e2e;
+            display: none;
+        }
+        #prop-panel h3 {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #5bd565;
+            margin-bottom: 12px;
+        }
+        .prop-reset {
+            font-size: 10px;
+            color: #555;
+            cursor: pointer;
+            float: right;
+            margin-top: 2px;
+        }
+        .prop-reset:hover { color: #888; }
     </style>
 </head>
 <body>
@@ -235,6 +258,24 @@
         <p class="status" id="status">Ready</p>
 
         <div class="info" id="shape-info">No shapes placed yet.</div>
+
+        <!-- Property editor — visible when a shape is selected with Select tool -->
+        <div id="prop-panel">
+            <h3 id="prop-title">Shape Properties</h3>
+            <div class="row" id="prop-mass-row">
+                <label>Mass
+                    <span id="prop-mass-v">3.0</span>
+                </label>
+                <input type="range" id="prop-mass" min="0.5" max="20" step="0.5" value="3.0">
+            </div>
+            <div class="row">
+                <label>Bounciness
+                    <span id="prop-bounce-v">Auto</span>
+                    <span class="prop-reset" id="prop-bounce-reset" title="Reset to global default">↺ global</span>
+                </label>
+                <input type="range" id="prop-bounce" min="0.00" max="1.00" step="0.05" value="0.70">
+            </div>
+        </div>
     </div>
 
 </div>
@@ -244,13 +285,16 @@
 
 <script>
 (function () {
-    // ─── State ──────────────────────────────────────────────────────────────
-    // shapes: {type:'box', cx,cy,w,h,mass} | {type:'circle', cx,cy,r,mass} | {type:'line', x1,y1,x2,y2}
+    // ─── State ─────────────────────────────────────────────────────────────
+    // shapes: {type:'box', cx,cy,w,h,mass,restitution} |
+    //         {type:'circle', cx,cy,r,mass,restitution} |
+    //         {type:'line', x1,y1,x2,y2,restitution}
+    // restitution: -1 = use field global; 0–1 = per-shape override
     let shapes     = [
-        { type:'box',    cx:370, cy:340, w:90,  h:65,  mass:3.0 },
-        { type:'circle', cx:140, cy:360, r:38,  mass:1.5 },
-        { type:'line',   x1:20,  y1:200, x2:210, y2:330 },
-        { type:'line',   x1:480, y1:190, x2:290, y2:310 },
+        { type:'box',    cx:370, cy:340, w:90,  h:65,  mass:3.0, restitution:-1 },
+        { type:'circle', cx:140, cy:360, r:38,  mass:1.5,        restitution:-1 },
+        { type:'line',   x1:20,  y1:200, x2:210, y2:330,        restitution:-1 },
+        { type:'line',   x1:480, y1:190, x2:290, y2:310,        restitution:-1 },
     ];
     let spawnZone  = { x1:40, y1:20, x2:460, y2:110 };
     let tool       = 'box';
@@ -368,15 +412,15 @@
             const w = dist > 12 ? Math.max(20, Math.abs(ddx)) : 70;
             const h = dist > 12 ? Math.max(20, Math.abs(ddy)) : 50;
             shapes.push({ type:'box', cx: sx + ddx/2, cy: sy + ddy/2,
-                          w, h, mass:3.0 });
+                          w, h, mass:3.0, restitution:-1 });
 
         } else if (tool === 'circle') {
             shapes.push({ type:'circle', cx: sx, cy: sy,
-                          r: Math.max(12, dist > 10 ? dist : 32), mass:1.5 });
+                          r: Math.max(12, dist > 10 ? dist : 32), mass:1.5, restitution:-1 });
 
         } else if (tool === 'line') {
             if (dist > 8)
-                shapes.push({ type:'line', x1:sx, y1:sy, x2:p.x, y2:p.y });
+                shapes.push({ type:'line', x1:sx, y1:sy, x2:p.x, y2:p.y, restitution:-1 });
 
         } else if (tool === 'spawn') {
             if (dist > 12)
@@ -599,7 +643,75 @@
         if (!parts.length) parts.push('no shapes');
         parts.push(spawnZone ? '✓ spawn zone' : 'no spawn zone');
         info.innerHTML = '<strong>Scene:</strong> ' + parts.join(' · ');
+        showProps();
     }
+
+    // ─── Property panel ──────────────────────────────────────────────────────
+    const propPanel      = document.getElementById('prop-panel');
+    const propTitle      = document.getElementById('prop-title');
+    const propMassRow    = document.getElementById('prop-mass-row');
+    const propMassSlider = document.getElementById('prop-mass');
+    const propMassVal    = document.getElementById('prop-mass-v');
+    const propBounce     = document.getElementById('prop-bounce');
+    const propBounceVal  = document.getElementById('prop-bounce-v');
+    const propReset      = document.getElementById('prop-bounce-reset');
+
+    function showProps() {
+        if (sel === null || sel === 'spawn' || tool !== 'select') {
+            propPanel.style.display = 'none';
+            return;
+        }
+        const s = shapes[sel];
+        if (!s) { propPanel.style.display = 'none'; return; }
+
+        propPanel.style.display = 'block';
+
+        // Title
+        const labels = { box:'Box', circle:'Circle', line:'Ramp' };
+        propTitle.textContent = (labels[s.type] || s.type) + ' Properties';
+
+        // Mass (not applicable to static lines)
+        propMassRow.style.display = (s.type === 'line') ? 'none' : '';
+        if (s.type !== 'line') {
+            propMassSlider.value = s.mass ?? 3.0;
+            propMassVal.textContent = parseFloat(propMassSlider.value).toFixed(1);
+        }
+
+        // Bounciness (-1 = auto/global)
+        const hasCustomBounce = (s.restitution ?? -1) >= 0;
+        propBounce.value = hasCustomBounce ? s.restitution : +document.getElementById('bounce').value;
+        updateBounceLabel();
+    }
+
+    function updateBounceLabel() {
+        const s = sel !== null && sel !== 'spawn' ? shapes[sel] : null;
+        if (!s) return;
+        const isCustom = (s.restitution ?? -1) >= 0;
+        propBounceVal.textContent = isCustom
+            ? parseFloat(propBounce.value).toFixed(2)
+            : 'Auto';
+        propBounceVal.style.color = isCustom ? '#5bd565' : '#888';
+        propReset.style.display   = isCustom ? '' : 'none';
+    }
+
+    propMassSlider.addEventListener('input', () => {
+        if (sel === null || sel === 'spawn') return;
+        shapes[sel].mass = parseFloat(propMassSlider.value);
+        propMassVal.textContent = parseFloat(propMassSlider.value).toFixed(1);
+    });
+
+    propBounce.addEventListener('input', () => {
+        if (sel === null || sel === 'spawn') return;
+        shapes[sel].restitution = parseFloat(propBounce.value);
+        updateBounceLabel();
+    });
+
+    propReset.addEventListener('click', () => {
+        if (sel === null || sel === 'spawn') return;
+        shapes[sel].restitution = -1;
+        propBounce.value = +document.getElementById('bounce').value;
+        updateBounceLabel();
+    });
 
     // ─── Init ─────────────────────────────────────────────────────────────────
     updateHint();

@@ -22,22 +22,31 @@ if (!empty($_GET['scene'])) {
         switch ($s['type'] ?? '') {
             case 'box':
                 $field->spawnBox(
-                    (float)($s['cx']   ?? 250), (float)($s['cy']   ?? 250),
-                    (float)($s['w']    ?? 60),  (float)($s['h']    ?? 40),
-                    (float)($s['mass'] ?? 3.0)
+                    (float)($s['cx']          ?? 250),
+                    (float)($s['cy']          ?? 250),
+                    (float)($s['w']           ?? 60),
+                    (float)($s['h']           ?? 40),
+                    (float)($s['mass']        ?? 3.0),
+                    (float)($s['restitution'] ?? -1.0)
                 );
                 break;
             case 'circle':
                 $field->spawnCircle(
-                    (float)($s['cx']   ?? 250), (float)($s['cy']   ?? 250),
-                    (float)($s['r']    ?? 30),  (int)(  $s['n']    ?? 10),
-                    (float)($s['mass'] ?? 1.5)
+                    (float)($s['cx']          ?? 250),
+                    (float)($s['cy']          ?? 250),
+                    (float)($s['r']           ?? 30),
+                    (int)(  $s['n']           ?? 10),
+                    (float)($s['mass']        ?? 1.5),
+                    (float)($s['restitution'] ?? -1.0)
                 );
                 break;
             case 'line':
                 $field->addStaticLine(
-                    (float)($s['x1'] ?? 0),   (float)($s['y1'] ?? 0),
-                    (float)($s['x2'] ?? 100), (float)($s['y2'] ?? 100)
+                    (float)($s['x1']          ?? 0),
+                    (float)($s['y1']          ?? 0),
+                    (float)($s['x2']          ?? 100),
+                    (float)($s['y2']          ?? 100),
+                    (float)($s['restitution'] ?? -1.0)
                 );
                 break;
             case 'spawn':

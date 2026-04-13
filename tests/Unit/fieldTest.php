@@ -155,7 +155,7 @@ it('static line: point moving into it gets bounced back', function () {
 
     $lRef = new \ReflectionProperty($field, 'staticLines');
     $lRef->setAccessible(true);
-    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0]]);
+    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0, -1.0]]);
 
     $resolve = new \ReflectionMethod($field, 'resolveStaticLineCollisions');
     $resolve->setAccessible(true);
@@ -179,7 +179,7 @@ it('static line: no response when point moving away', function () {
 
     $lRef = new \ReflectionProperty($field, 'staticLines');
     $lRef->setAccessible(true);
-    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0]]);
+    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0, -1.0]]);
 
     $resolve = new \ReflectionMethod($field, 'resolveStaticLineCollisions');
     $resolve->setAccessible(true);

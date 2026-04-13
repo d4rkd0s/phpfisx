@@ -13,17 +13,19 @@ class constraint {
     private point $b;
     private float $restLength;
     private bool  $isBoundary;
+    private float $restitution; // -1.0 = defer to field default
 
     /**
-     * @param float $restLength Pass -1.0 (default) to auto-calculate from current distance.
-     * @param bool  $isBoundary True = this edge forms the outer surface of a shape and
-     *                          participates in point-vs-edge collision detection.
-     *                          False = internal structural brace (diagonal) — never collides.
+     * @param float $restLength  Pass -1.0 (default) to auto-calculate from current distance.
+     * @param bool  $isBoundary  True = outer surface, participates in point-vs-edge collision.
+     *                           False = internal structural brace (diagonal) — never collides.
+     * @param float $restitution Per-constraint bounciness override. -1.0 = use field default.
      */
-    public function __construct(point $a, point $b, float $restLength = -1.0, bool $isBoundary = true) {
-        $this->a          = $a;
-        $this->b          = $b;
-        $this->isBoundary = $isBoundary;
+    public function __construct(point $a, point $b, float $restLength = -1.0, bool $isBoundary = true, float $restitution = -1.0) {
+        $this->a           = $a;
+        $this->b           = $b;
+        $this->isBoundary  = $isBoundary;
+        $this->restitution = $restitution;
 
         if ($restLength >= 0.0) {
             $this->restLength = $restLength;
@@ -35,6 +37,9 @@ class constraint {
     }
 
     public function isBoundary(): bool { return $this->isBoundary; }
+
+    /** Returns this constraint's restitution, or -1.0 if it defers to the field default. */
+    public function getConstraintRestitution(): float { return $this->restitution; }
 
     /**
      * Correct positions so the two points are exactly restLength apart.

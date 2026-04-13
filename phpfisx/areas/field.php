@@ -76,10 +76,10 @@ class field {
 
     /**
      * Add an immovable collision surface (wall, ramp, platform).
-     * Points bounce off it with the field's restitution coefficient.
+     * @param float $restitution Per-surface bounciness. -1.0 = use field default.
      */
-    public function addStaticLine(float $x1, float $y1, float $x2, float $y2): void {
-        $this->staticLines[] = [$x1, $y1, $x2, $y2];
+    public function addStaticLine(float $x1, float $y1, float $x2, float $y2, float $restitution = -1.0): void {
+        $this->staticLines[] = [$x1, $y1, $x2, $y2, $restitution];
     }
 
     /**
@@ -211,10 +211,11 @@ class field {
             "points"      => array_map(fn($p) => $p->toArray(), $this->points),
             "lines"       => $this->lines,
             "constraints" => array_map(fn($c) => [
-                'a_id'     => $c->getA()->getID(),
-                'b_id'     => $c->getB()->getID(),
-                'rest'     => $c->getRestLength(),
-                'boundary' => $c->isBoundary(),
+                'a_id'        => $c->getA()->getID(),
+                'b_id'        => $c->getB()->getID(),
+                'rest'        => $c->getRestLength(),
+                'boundary'    => $c->isBoundary(),
+                'restitution' => $c->getConstraintRestitution(),
             ], $this->constraints),
         ]));
         fclose($fp);
@@ -248,7 +249,8 @@ class field {
                     $pointMap[$rc['a_id']],
                     $pointMap[$rc['b_id']],
                     $rc['rest'],
-                    $rc['boundary'] ?? true
+                    $rc['boundary']    ?? true,
+                    $rc['restitution'] ?? -1.0
                 );
             }
         }
@@ -268,34 +270,39 @@ class field {
      * Register a box to be spawned at simulation start.
      * Call before visualize(). The box is materialized on step 1.
      */
-    public function spawnBox(float $cx, float $cy, float $w, float $h, float $mass = 1.0): void {
+    /**
+     * @param float $restitution Per-shape bounciness override. -1.0 = use field default.
+     */
+    public function spawnBox(float $cx, float $cy, float $w, float $h, float $mass = 1.0, float $restitution = -1.0): void {
         $this->shapeBlueprints[] = [
             'type' => 'box', 'cx' => $cx, 'cy' => $cy,
-            'w'    => $w,    'h'  => $h,  'mass' => $mass,
+            'w'    => $w,    'h'  => $h,  'mass' => $mass, 'restitution' => $restitution,
         ];
     }
 
     /**
      * Register a circle (polygon approximation) to be spawned at simulation start.
+     * @param float $restitution Per-shape bounciness override. -1.0 = use field default.
      */
-    public function spawnCircle(float $cx, float $cy, float $r, int $n = 8, float $mass = 1.0): void {
+    public function spawnCircle(float $cx, float $cy, float $r, int $n = 8, float $mass = 1.0, float $restitution = -1.0): void {
         $this->shapeBlueprints[] = [
             'type' => 'circle', 'cx' => $cx, 'cy' => $cy,
-            'r'    => $r,       'n'  => $n,  'mass' => $mass,
+            'r'    => $r,       'n'  => $n,  'mass' => $mass, 'restitution' => $restitution,
         ];
     }
 
     private function materializeShapes(): void {
         $this->constraints = [];
         foreach ($this->shapeBlueprints as $bp) {
+            $r = $bp['restitution'] ?? -1.0;
             match ($bp['type']) {
-                'box'    => $this->materializeBox($bp['cx'], $bp['cy'], $bp['w'], $bp['h'], $bp['mass']),
-                'circle' => $this->materializeCircle($bp['cx'], $bp['cy'], $bp['r'], $bp['n'], $bp['mass']),
+                'box'    => $this->materializeBox($bp['cx'], $bp['cy'], $bp['w'], $bp['h'], $bp['mass'], $r),
+                'circle' => $this->materializeCircle($bp['cx'], $bp['cy'], $bp['r'], $bp['n'], $bp['mass'], $r),
             };
         }
     }
 
-    private function materializeBox(float $cx, float $cy, float $w, float $h, float $mass): void {
+    private function materializeBox(float $cx, float $cy, float $w, float $h, float $mass, float $restitution = -1.0): void {
         $hw = $w / 2.0;
         $hh = $h / 2.0;
 
@@ -305,15 +312,15 @@ class field {
         $d = $this->makePoint($cx + $hw, $cy + $hh, $mass); // bottom-right
 
         // Edges (4) — boundary surface; diagonals (2) — internal structural braces only
-        $this->constraints[] = new constraint($a, $b, -1.0, true);
-        $this->constraints[] = new constraint($c, $d, -1.0, true);
-        $this->constraints[] = new constraint($a, $c, -1.0, true);
-        $this->constraints[] = new constraint($b, $d, -1.0, true);
-        $this->constraints[] = new constraint($a, $d, -1.0, false); // diagonal
-        $this->constraints[] = new constraint($b, $c, -1.0, false); // diagonal
+        $this->constraints[] = new constraint($a, $b, -1.0, true,  $restitution);
+        $this->constraints[] = new constraint($c, $d, -1.0, true,  $restitution);
+        $this->constraints[] = new constraint($a, $c, -1.0, true,  $restitution);
+        $this->constraints[] = new constraint($b, $d, -1.0, true,  $restitution);
+        $this->constraints[] = new constraint($a, $d, -1.0, false, -1.0); // diagonal — never collides
+        $this->constraints[] = new constraint($b, $c, -1.0, false, -1.0); // diagonal — never collides
     }
 
-    private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass): void {
+    private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass, float $restitution = -1.0): void {
         $pts = [];
         for ($i = 0; $i < $n; $i++) {
             $angle = (2.0 * M_PI * $i) / $n;
@@ -322,13 +329,13 @@ class field {
 
         // Ring constraints between adjacent perimeter points — boundary surface
         for ($i = 0; $i < $n; $i++) {
-            $this->constraints[] = new constraint($pts[$i], $pts[($i + 1) % $n], -1.0, true);
+            $this->constraints[] = new constraint($pts[$i], $pts[($i + 1) % $n], -1.0, true, $restitution);
         }
 
         // Cross constraints (diameters) for rigidity — internal only, never collide
         $half = (int)($n / 2);
         for ($i = 0; $i < $half; $i++) {
-            $this->constraints[] = new constraint($pts[$i], $pts[$i + $half], -1.0, false);
+            $this->constraints[] = new constraint($pts[$i], $pts[$i + $half], -1.0, false, -1.0);
         }
     }
 
@@ -370,7 +377,6 @@ class field {
     private function resolveStaticLineCollisions(): void {
         if (empty($this->staticLines)) return;
 
-        $e      = $this->restitution;
         $radius = $this->collisionRadius;
 
         foreach ($this->points as $p) {
@@ -378,7 +384,8 @@ class field {
             $py = $p->getY();
             $vp = $p->getVelocity();
 
-            foreach ($this->staticLines as [$x1, $y1, $x2, $y2]) {
+            foreach ($this->staticLines as [$x1, $y1, $x2, $y2, $lineE]) {
+                $e   = ($lineE >= 0.0) ? $lineE : $this->restitution;
                 $abx = $x2 - $x1; $aby = $y2 - $y1;
                 $ab2 = $abx * $abx + $aby * $aby;
                 if ($ab2 < 0.0001) continue;
@@ -503,7 +510,6 @@ class field {
     private function resolveEdgeCollisions(): void {
         if (empty($this->constraints)) return;
 
-        $e      = $this->restitution;
         $radius = $this->collisionRadius;
 
         for ($i = 0; $i < $this->pointCount; $i++) {
@@ -517,6 +523,10 @@ class field {
 
             foreach ($this->constraints as $c) {
                 if (!$c->isBoundary()) continue;
+                // Use this constraint's restitution, or fall back to the field default
+                $e = ($c->getConstraintRestitution() >= 0.0)
+                    ? $c->getConstraintRestitution()
+                    : $this->restitution;
 
                 $ea  = $c->getA();
                 $eb  = $c->getB();
