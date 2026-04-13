@@ -138,6 +138,56 @@ it('edge collision: point moving into horizontal edge gets bounced back', functi
     expect($p->getVelocity()->y)->toBeLessThan(0);
 });
 
+it('static line: point moving into it gets bounced back', function () {
+    // Horizontal static line at y=200; point above it moving down
+    $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 10.0, 1.0);
+    $field->addStaticLine(0.0, 200.0, 500.0, 200.0);
+
+    $p = new point($field, 0, 'p', 250.0, 195.0, 0.0, 8.0, 1.0); // vy=8, approaching
+
+    $pcRef = new \ReflectionProperty($field, 'pointCount');
+    $pcRef->setAccessible(true);
+    $pcRef->setValue($field, 1);
+
+    $ptsRef = new \ReflectionProperty($field, 'points');
+    $ptsRef->setAccessible(true);
+    $ptsRef->setValue($field, [$p]);
+
+    $lRef = new \ReflectionProperty($field, 'staticLines');
+    $lRef->setAccessible(true);
+    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0]]);
+
+    $resolve = new \ReflectionMethod($field, 'resolveStaticLineCollisions');
+    $resolve->setAccessible(true);
+    $resolve->invoke($field);
+
+    expect($p->getVelocity()->y)->toBeLessThan(0);
+});
+
+it('static line: no response when point moving away', function () {
+    $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 10.0, 1.0);
+
+    $p = new point($field, 0, 'p', 250.0, 195.0, 0.0, -5.0, 1.0); // moving up, away
+
+    $pcRef = new \ReflectionProperty($field, 'pointCount');
+    $pcRef->setAccessible(true);
+    $pcRef->setValue($field, 1);
+
+    $ptsRef = new \ReflectionProperty($field, 'points');
+    $ptsRef->setAccessible(true);
+    $ptsRef->setValue($field, [$p]);
+
+    $lRef = new \ReflectionProperty($field, 'staticLines');
+    $lRef->setAccessible(true);
+    $lRef->setValue($field, [[0.0, 200.0, 500.0, 200.0]]);
+
+    $resolve = new \ReflectionMethod($field, 'resolveStaticLineCollisions');
+    $resolve->setAccessible(true);
+    $resolve->invoke($field);
+
+    expect($p->getVelocity()->y)->toBe(-5.0); // unchanged
+});
+
 it('edge collision: no response when point moving away from edge', function () {
     $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 10.0, 1.0);
 

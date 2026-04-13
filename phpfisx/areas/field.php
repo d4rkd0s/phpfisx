@@ -18,6 +18,8 @@ class field {
     private $lines = array();
     private array $constraints = [];
     private array $shapeBlueprints = [];
+    private array $staticLines = [];
+    private ?array $spawnZone = null;
     private $gravity;
     private float $friction;
     private float $collisionRadius;
@@ -72,6 +74,25 @@ class field {
         return $this->restitution;
     }
 
+    /**
+     * Add an immovable collision surface (wall, ramp, platform).
+     * Points bounce off it with the field's restitution coefficient.
+     */
+    public function addStaticLine(float $x1, float $y1, float $x2, float $y2): void {
+        $this->staticLines[] = [$x1, $y1, $x2, $y2];
+    }
+
+    /**
+     * Constrain random particle spawning to a rectangle.
+     * Without this, particles spawn anywhere inside the field bounds.
+     */
+    public function setSpawnZone(float $x1, float $y1, float $x2, float $y2): void {
+        $this->spawnZone = [
+            min($x1, $x2), min($y1, $y2),
+            max($x1, $x2), max($y1, $y2),
+        ];
+    }
+
     private function setGravity($gravity) {
         $this->gravity = $gravity;
     }
@@ -120,8 +141,18 @@ class field {
     }
 
     public function generatePoints() {
-        for ($i=0; $i < $this->pointCount; $i++) { 
-            $this->points[$i] = new point($this, $i);
+        if ($this->spawnZone) {
+            [$x1, $y1, $x2, $y2] = $this->spawnZone;
+            for ($i = 0; $i < $this->pointCount; $i++) {
+                srand($i + 77777); // deterministic but distinct from default seed
+                $x = $x1 + ($x2 - $x1) * (rand(0, 10000) / 10000.0);
+                $y = $y1 + ($y2 - $y1) * (rand(0, 10000) / 10000.0);
+                $this->points[$i] = new point($this, 0, $this->newUuid(), $x, $y);
+            }
+        } else {
+            for ($i = 0; $i < $this->pointCount; $i++) {
+                $this->points[$i] = new point($this, $i);
+            }
         }
     }
 
@@ -329,11 +360,67 @@ class field {
         }
     }
 
+    /**
+     * resolveStaticLineCollisions — Bounce ALL points off immovable line surfaces.
+     *
+     * Static lines have infinite mass, so the impulse formula simplifies:
+     *   dv = -(1+e) * (v·n)   (the point's normal-component velocity gets reflected)
+     * Mass cancels entirely — heavier particles bounce just as high as lighter ones.
+     */
+    private function resolveStaticLineCollisions(): void {
+        if (empty($this->staticLines)) return;
+
+        $e      = $this->restitution;
+        $radius = $this->collisionRadius;
+
+        foreach ($this->points as $p) {
+            $px = $p->getX();
+            $py = $p->getY();
+            $vp = $p->getVelocity();
+
+            foreach ($this->staticLines as [$x1, $y1, $x2, $y2]) {
+                $abx = $x2 - $x1; $aby = $y2 - $y1;
+                $ab2 = $abx * $abx + $aby * $aby;
+                if ($ab2 < 0.0001) continue;
+
+                $apx = $px - $x1; $apy = $py - $y1;
+                $t   = max(0.0, min(1.0, ($apx * $abx + $apy * $aby) / $ab2));
+                $cpx = $x1 + $t * $abx;
+                $cpy = $y1 + $t * $aby;
+
+                $dx   = $px - $cpx;
+                $dy   = $py - $cpy;
+                $dist = sqrt($dx * $dx + $dy * $dy);
+
+                if ($dist >= $radius || $dist < 0.0001) continue;
+
+                $nx = $dx / $dist;
+                $ny = $dy / $dist;
+
+                // Relative velocity along normal (wall is stationary)
+                $rvn = $vp->x * $nx + $vp->y * $ny;
+                if ($rvn >= 0) continue; // already separating
+
+                // Infinite-mass wall: mass cancels → dv = -(1+e)*rvn
+                $dv = -(1.0 + $e) * $rvn;
+                $vp->x += $dv * $nx;
+                $vp->y += $dv * $ny;
+
+                // Push point clear of the surface
+                $overlap = $radius - $dist;
+                $p->setCoords($px + $nx * $overlap, $py + $ny * $overlap);
+                $px = $p->getX();
+                $py = $p->getY();
+            }
+        }
+    }
+
     public function runFisx() {
         $this->turbulence();       // loose points only (see below)
         $this->applyGravity();     // all points
         $this->resolvePointCollisions();
         $this->resolveEdgeCollisions();
+        $this->resolveStaticLineCollisions();
         foreach ($this->points as $point) {
             $point->integrate();
         }
@@ -536,11 +623,19 @@ class field {
             $gray  = imagecolorallocate($gd, 245, 245, 245);
             $black = imagecolorallocate($gd, 0, 0, 0);
             $blue  = imagecolorallocate($gd, 30, 80, 200);
+            $red   = imagecolorallocate($gd, 210, 50, 35);
 
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
             imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border * 1.5, $this->getYMax() - $border * 1.5, $white);
 
-            // Draw only boundary edges (skip internal diagonal braces)
+            // Static surfaces — drawn thick and red so they stand out
+            imagesetthickness($gd, 3);
+            foreach ($this->staticLines as [$lx1, $ly1, $lx2, $ly2]) {
+                imageline($gd, (int)round($lx1), (int)round($ly1), (int)round($lx2), (int)round($ly2), $red);
+            }
+            imagesetthickness($gd, 1);
+
+            // Draw only boundary edges of rigid bodies (skip internal diagonal braces)
             foreach ($this->constraints as $c) {
                 if (!$c->isBoundary()) continue;
                 imageline($gd,
