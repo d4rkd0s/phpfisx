@@ -1,93 +1,125 @@
-<img src="logo.png" alt="logo" width="200"/>
+<img src="logo.png" alt="phpfisx logo" width="180"/>
 
-A physics engine written in PHP
+# phpfisx — PHP Physics Engine
 
-<hr>
+[![CI](https://github.com/d4rkd0s/phpfisx/actions/workflows/ci.yml/badge.svg)](https://github.com/d4rkd0s/phpfisx/actions/workflows/ci.yml)
+[![PHP](https://img.shields.io/badge/PHP-8.1%2B-blue)](https://www.php.net/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-![Simple Points Animated GIF](simple_points.gif)
+A 2D physics simulation engine written in PHP — because why not.
 
-## Install / Use
-Currently I have my latest "simulation" hard coded into the repo, but its easy to change. Anyways to see/run what I'm currently working on in the engine follow the steps below.
+Runs locally with just `php -S` and a browser. No compilation, no external services, no WebGL. Pure PHP + HTML5 canvas playback.
 
-Install php first http://php.net/manual/en/install.php
+![Simulation demo](simple_points.gif)
 
-Ensure you have `php_gd2` enabled for image rendering.
+---
 
-1. Clone the repo and go into the directory
-`git clone https://github.com/d4rkd0s/phpfisx && cd phpfisx`
+## Features
 
-2. Run a local webserver with PHP
-`php -S localhost:8000`
+- **Position-Based Dynamics** — distance constraints hold rigid bodies together across multiple solver iterations per step
+- **Rigid bodies** — spawn boxes and circles; each shape is a network of PBD constraints with mass-weighted correction
+- **Point-vs-edge collision** — loose particles bounce off shape surfaces with configurable restitution (bounciness)
+- **Elastic point-point collision** — mass-weighted impulse response between particles
+- **Gravity + custom forces** — directional force with magnitude and degree-based direction
+- **Friction / velocity damping** — per-field drag coefficient applied each step
+- **Interactive control panel** — sliders for gravity, friction, bounciness, particle count, and step count
+- **Animated canvas playback** — pre-baked PNG frames played back in-browser with play/pause/scrub
+- **PSR-4 autoloading**, PHP 8.1+, Pest test suite, GitHub Actions CI
 
-3. View in your browser, I use Chrome
-http://localhost:8000/
+---
 
+## Quickstart
 
-### Got Yarn? Php in PATH? go FAST!!!
+```bash
+# Clone and install
+git clone https://github.com/d4rkd0s/phpfisx
+cd phpfisx
+composer install
 
-`yarn start`
+# Run the dev server
+php -S localhost:8000
 
-Then visit: http://localhost:8000/
+# Open in browser
+open http://localhost:8000
+```
 
-It should... work:
+**Requirements:** PHP 8.1+ with `ext-gd` enabled, Composer.
 
-![Image explaining to run, yarn start, and the website is available via, localhost, on port, 8080](quick_start.png)
+**Got Yarn?**
+```bash
+yarn start   # starts php -S localhost:8000
+```
 
-### How?
+---
 
-Using PHP, and some simple Object Oriented programming. A re-used random seed is used to calculate based on the current "step", data/points/variables, to produce the resulting math behind some **simple** physics. Visualizing it currently is being done with some iframe.onload and stepping through and requesting PNG images of the current "state" of the simulation. Each state is generated on the fly, and each request to phpfisx returns a single state. In the future I would I plan to "bake" states, so calculations can be ran once, for all states, and then a final Simulation can be played. In some smaller simulations a "live" view is what I'll be trying to achive allowing some simple things to be ran on the fly/adjusted.
+## How It Works
 
-### Why?
+Each simulation is a **field** containing **points** (particles) and optional **constraints** (rigid body edges).
 
-Theres plenty of complex, overbloated libraries in many languages. Most graphics / simulations are ran in compiled languages like C, C++, Java, Golang... etc. But I know what I wanted to achieve wasn't overly complex (at least when I started) and PHP is such a friendly language, it's ability to run on the fly without compiling and interoperability with the web. Makes is portable and easy to use, all you need is php (internal web server with `php -S`) and a browser.
+**Physics loop per step:**
+1. Apply turbulence (random micro-forces to loose particles)
+2. Apply gravity (downward force, scaled by mass)
+3. Resolve point-point collisions (elastic impulse)
+4. Resolve point-vs-edge collisions (impulse vs rigid body surfaces)
+5. Integrate velocity → position (with wall reflection + friction)
+6. Solve PBD constraints (N iterations — keeps rigid bodies stiff)
+7. Feed constraint position deltas back into velocity
 
-### Why? (Asking Chat GPT 😂)
+The full simulation is pre-calculated server-side, then each frame is rendered to a PNG via PHP GD and base64-encoded into a self-contained HTML page with a canvas player.
 
-Prompt: `What would you want to run a physics simulation in PHP? What would be the benefits of using PHP as your selected language?`
+---
 
-Answer:
+## Architecture
 
-*There are a few benefits to using PHP for running a physics simulation:*
+```
+phpfisx/
+├── phpfisx/
+│   ├── areas/
+│   │   └── field.php          # Simulation space, physics loop, rendering
+│   └── entities/
+│       ├── point.php           # Particle — position, velocity, mass, integrate
+│       ├── constraint.php      # PBD distance constraint (boundary or internal)
+│       ├── vector.php          # 2D vector math
+│       └── line.php            # Line segment entity
+├── tests/Unit/                 # Pest test suite (48 tests)
+├── render.php                  # HTTP endpoint — runs sim, returns animated HTML
+├── index.php                   # Control panel UI
+├── boot.php                    # Composer autoload bootstrap
+└── composer.json
+```
 
-*- PHP is a general-purpose programming language, so it has a lot of built-in features and functions that you can use to build your simulation.*
+---
 
-*- PHP is a server-side language, so you can easily set up a web-based interface for your simulation. This can make it easy for users to interact with your simulation and view the results.*
+## Reporting Issues
 
-*- PHP is relatively easy to learn and use, so it may be a good choice for someone who is just starting out with programming or who is not an experienced software developer.*
+Use the [GitHub issue tracker](https://github.com/d4rkd0s/phpfisx/issues/new/choose) — select **Bug** or **Feature**.
 
+---
 
-### Reporting Issues
+## Roadmap
 
-Please use the standard GitHub issue tracker.
-
-Report issues here: https://github.com/d4rkd0s/phpfisx/issues/new/choose
-
-Select Bug or Feature.
-
-![Image showcasing the different issue choices, bug, and, feature, which are available at, https://github.com/d4rkd0s/phpfisx/issues/new/choose](bug-feature-image.png)
-
-### Planned Features
-
-- [x] 2D Scale (1px = 1 meter)
-- [x] 2D Fields (2d structure with bounds x,y)
-- [x] 2D Points (Point's live in fields)
-- [x] 2D Visualizer (built in PHP GD Image Library)
+- [x] 2D Fields with bounds
+- [x] 2D Points (particles)
 - [x] 2D Gravity
-- [x] 2D Force
-- [X] 2D Disk Stored States (.gitignore'd `field.json` file in root of repo)
-- [-] 2D Mass (Basic implementation with gravity)
-- [ ] 2D Velocity
-- [ ] 2D Lines
-- [ ] 2D Collision Detection
-- [ ] 2D Polygons
-- [ ] 2D Friction
-- [ ] 2D Materials
-- [ ] 2D Adjustable Scale
-- [ ] Live system unstepped
+- [x] 2D Custom forces
+- [x] 2D Velocity system
+- [x] 2D Friction / velocity damping
+- [x] 2D Mass + inertia
+- [x] 2D Point-to-point elastic collision
+- [x] 2D Rigid bodies (boxes + circles via PBD constraints)
+- [x] 2D Point-vs-edge collision with restitution
+- [x] 2D Disk-persisted simulation state
+- [x] 2D Animated canvas playback
+- [ ] 2D Static collision surfaces (immovable walls/ramps)
+- [ ] 2D Scene editor (visual placement of shapes)
+- [ ] 2D Materials (per-shape restitution + friction)
+- [ ] Live unstepped simulation
 - [ ] 3D Spaces
-- [ ] 3D Points
-- [ ] 3D Lines
-- [ ] 3D Polygons
-- [ ] 3D Shapes
-- [ ] 3D .stl imports https://en.wikipedia.org/wiki/STL_(file_format)
-- [ ] 3D .obj imports http://paulbourke.net/dataformats/obj/
+- [ ] 3D Points, Lines, Polygons
+- [ ] 3D .stl / .obj import
+
+---
+
+## License
+
+[MIT](LICENSE) — Logan Schmidt

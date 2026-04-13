@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>phpfisx — PHP Physics Engine</title>
+<meta name="description" content="A 2D physics simulation engine written in PHP. Rigid bodies, elastic collisions, PBD constraints — runs with just php -S and a browser.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #5bd565;
+    --dark:   #1a1a1a;
+    --panel:  #242424;
+    --border: #333;
+    --text:   #e0e0e0;
+    --muted:  #888;
+    --code-bg: #0d1117;
+  }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+  }
+
+  a { color: var(--green); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Hero ─────────────────────────────────────────────────────────── */
+  .hero {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 60px 24px 48px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .hero img { height: 80px; }
+  .hero-text h1 {
+    font-size: 42px;
+    color: var(--green);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+    line-height: 1;
+  }
+  .hero-text p {
+    margin-top: 8px;
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 520px;
+  }
+
+  .badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .badges img { height: 20px; }
+
+  /* ── Main content ──────────────────────────────────────────────────── */
+  .content {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Demo ──────────────────────────────────────────────────────────── */
+  .demo {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .demo img {
+    max-width: 100%;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .demo p {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── Features ─────────────────────────────────────────────────────── */
+  h2 {
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .feature {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  .feature h3 {
+    font-size: 14px;
+    color: var(--green);
+    margin-bottom: 6px;
+    font-family: 'Courier New', monospace;
+  }
+  .feature p {
+    font-size: 13px;
+    color: #aaa;
+  }
+
+  /* ── Quickstart ────────────────────────────────────────────────────── */
+  .quickstart {
+    margin-bottom: 40px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 20px;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c9d1d9;
+  }
+  pre .comment { color: #6e7681; }
+  pre .cmd { color: var(--green); }
+
+  /* ── Checklist ─────────────────────────────────────────────────────── */
+  .checklist {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+    columns: 2;
+    column-gap: 32px;
+  }
+  .checklist ul { list-style: none; }
+  .checklist li {
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    padding: 4px 0;
+    color: #aaa;
+    break-inside: avoid;
+  }
+  .checklist li.done { color: var(--green); }
+  .checklist li.done::before { content: '✓  '; }
+  .checklist li.todo::before { content: '○  '; color: var(--muted); }
+
+  /* ── CTA ───────────────────────────────────────────────────────────── */
+  .cta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+  }
+  .btn {
+    display: inline-block;
+    padding: 11px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; text-decoration: none; }
+  .btn-primary { background: var(--green); color: #111; }
+  .btn-secondary { background: transparent; color: var(--green); border: 1px solid var(--green); }
+
+  /* ── Footer ────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+  }
+
+  @media (max-width: 600px) {
+    .checklist { columns: 1; }
+    .hero-text h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <img src="logo.png" alt="phpfisx">
+  <div class="hero-text">
+    <h1>phpfisx</h1>
+    <p>A 2D physics simulation engine written in PHP.<br>
+       Rigid bodies, elastic collisions, PBD constraints —<br>
+       runs with just <code>php -S</code> and a browser.</p>
+    <div class="badges">
+      <a href="https://github.com/d4rkd0s/phpfisx/actions/workflows/ci.yml">
+        <img src="https://github.com/d4rkd0s/phpfisx/actions/workflows/ci.yml/badge.svg" alt="CI">
+      </a>
+      <img src="https://img.shields.io/badge/PHP-8.1%2B-blue" alt="PHP 8.1+">
+      <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT">
+    </div>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="demo">
+    <img src="simple_points.gif" alt="phpfisx simulation demo">
+    <p>particles · gravity · collision · rigid bodies · configurable bounciness</p>
+  </div>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/d4rkd0s/phpfisx">View on GitHub</a>
+    <a class="btn btn-secondary" href="https://github.com/d4rkd0s/phpfisx/issues/new/choose">Report Issue / Request Feature</a>
+  </div>
+
+  <h2>Features</h2>
+  <div class="features">
+    <div class="feature">
+      <h3>Rigid Bodies</h3>
+      <p>Spawn boxes and circles held together by PBD distance constraints with mass-weighted correction.</p>
+    </div>
+    <div class="feature">
+      <h3>Elastic Collisions</h3>
+      <p>Mass-weighted impulse response for point-point and point-vs-edge collisions. Configurable restitution (0–1).</p>
+    </div>
+    <div class="feature">
+      <h3>Gravity + Forces</h3>
+      <p>Gravity, friction damping, and custom directional forces. Newton's second law: a = F/m.</p>
+    </div>
+    <div class="feature">
+      <h3>Canvas Playback</h3>
+      <p>Simulation pre-baked server-side; PNG frames streamed to an in-browser canvas player with play/pause/scrub.</p>
+    </div>
+    <div class="feature">
+      <h3>Interactive Controls</h3>
+      <p>Sliders for gravity, friction, bounciness, particle count, and step count. Spawn rigid bodies on demand.</p>
+    </div>
+    <div class="feature">
+      <h3>Test Suite + CI</h3>
+      <p>48 Pest tests covering physics, constraints, and collision. GitHub Actions matrix across PHP 8.1/8.2/8.3.</p>
+    </div>
+  </div>
+
+  <h2>Quickstart</h2>
+  <div class="quickstart">
+<pre><span class="comment"># Clone and install</span>
+<span class="cmd">git clone</span> https://github.com/d4rkd0s/phpfisx
+<span class="cmd">cd</span> phpfisx
+<span class="cmd">composer install</span>
+
+<span class="comment"># Start dev server</span>
+<span class="cmd">php -S localhost:8000</span>
+
+<span class="comment"># Open in browser</span>
+open http://localhost:8000</pre>
+    <p style="margin-top:10px;font-size:13px;color:var(--muted)">
+      Requires PHP 8.1+ with <code>ext-gd</code> enabled and Composer.
+      Got Yarn? <code>yarn start</code> does the same thing.
+    </p>
+  </div>
+
+  <h2>Roadmap</h2>
+  <div class="checklist">
+    <ul>
+      <li class="done">2D Fields with bounds</li>
+      <li class="done">2D Points (particles)</li>
+      <li class="done">2D Gravity</li>
+      <li class="done">2D Custom forces</li>
+      <li class="done">2D Velocity system</li>
+      <li class="done">2D Friction / damping</li>
+      <li class="done">2D Mass + inertia</li>
+      <li class="done">Point-point elastic collision</li>
+      <li class="done">Rigid bodies (boxes + circles)</li>
+      <li class="done">Point-vs-edge collision</li>
+      <li class="done">Restitution (bounciness)</li>
+      <li class="done">Animated canvas playback</li>
+      <li class="todo">Static surfaces (walls/ramps)</li>
+      <li class="todo">Visual scene editor</li>
+      <li class="todo">Per-shape materials</li>
+      <li class="todo">Live unstepped simulation</li>
+      <li class="todo">3D Spaces + shapes</li>
+      <li class="todo">3D .stl / .obj import</li>
+    </ul>
+  </div>
+
+  <h2>Why PHP?</h2>
+  <div class="feature" style="margin-bottom:40px">
+    <p>
+      There are plenty of physics engines in compiled languages (C++, Rust, Go).
+      PHP is different: no compilation, no install friction, runs anywhere a web server exists,
+      and it's genuinely fun to push a language into unexpected territory.
+      phpfisx is a proof of concept that the physics are the interesting part — not the runtime.
+    </p>
+  </div>
+
+</div>
+
+<footer>
+  <a href="https://github.com/d4rkd0s/phpfisx">github.com/d4rkd0s/phpfisx</a>
+  &nbsp;·&nbsp;
+  MIT License
+  &nbsp;·&nbsp;
+  Built with PHP + no regrets
+</footer>
+
+</body>
+</html>

@@ -2,3 +2,8 @@ vendor/
 field.json
 images/*.png
 .phpunit.result.cache
+node_modules/
+.claude/
+composer.phar
+claude.md
+plan.md

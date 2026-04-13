@@ -1,1 +1,2 @@
-theme: jekyll-theme-cayman
+title: phpfisx
+description: A 2D physics simulation engine written in PHP. Rigid bodies, elastic collisions, PBD constraints.
