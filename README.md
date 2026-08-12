@@ -98,25 +98,7 @@ Use the [GitHub issue tracker](https://github.com/d4rkd0s/phpfisx/issues/new/cho
 
 ## Roadmap
 
-- [x] 2D Fields with bounds
-- [x] 2D Points (particles)
-- [x] 2D Gravity
-- [x] 2D Custom forces
-- [x] 2D Velocity system
-- [x] 2D Friction / velocity damping
-- [x] 2D Mass + inertia
-- [x] 2D Point-to-point elastic collision
-- [x] 2D Rigid bodies (boxes + circles via PBD constraints)
-- [x] 2D Point-vs-edge collision with restitution
-- [x] 2D Disk-persisted simulation state
-- [x] 2D Animated canvas playback
-- [ ] 2D Static collision surfaces (immovable walls/ramps)
-- [ ] 2D Scene editor (visual placement of shapes)
-- [ ] 2D Materials (per-shape restitution + friction)
-- [ ] Live unstepped simulation
-- [ ] 3D Spaces
-- [ ] 3D Points, Lines, Polygons
-- [ ] 3D .stl / .obj import
+See [ROADMAP.md](ROADMAP.md) for what's done and what's next.
 
 ---
 
