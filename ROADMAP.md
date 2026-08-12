@@ -15,11 +15,11 @@ Status of the physics engine and what's next. See `CLAUDE.md` for architecture a
 - Per-shape materials (mass + restitution override per shape)
 - Spawn zones
 - PSR-4 autoloading, Pest test suite, GitHub Actions CI (PHP 8.1–8.3)
+- Joints / hinges — `joint` entity connects two points (or a point to a fixed world anchor) with a single PBD distance constraint that leaves rotation free, unlike rigid multi-constraint shapes
 
 ## Next
 
 - **Live mode** — WebSocket or SSE streaming so simulations play without a full page reload between steps
-- **Joints / hinges** — connect bodies with rotation instead of rigid PBD constraints
 - **Fluid / soft body mode** — mass-spring or SPH-based deformable simulation
 
 ## Later / exploratory

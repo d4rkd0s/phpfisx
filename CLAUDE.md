@@ -12,6 +12,7 @@ phpfisx/
   entities/
     point.php            — particle with mass, velocity, boundary reflection
     constraint.php       — PBD distance constraint between two points
+    joint.php            — PBD hinge: single distance constraint, rotation left free (see below)
     vector.php           — 2D math helpers
 render.php               — HTTP endpoint: runs simulation, returns HTML animation
 index.php                — browser scene editor (canvas drag-and-drop)
@@ -28,6 +29,8 @@ tests/Unit/              — Pest v1 unit tests (50 tests)
 - **Static lines don't persist to `field.json`**: The entire simulation runs inside a single PHP request within `visualize()`. `$this->staticLines` lives in memory across all steps — no need to serialize it.
 
 - **Spawn zone**: `setSpawnZone(x1,y1,x2,y2)` constrains initial particle placement. Uses `srand($i + 77777)` for determinism distinct from the full-field default seeding.
+
+- **Joints**: `joint` (`field::addJoint()`/`addJointAnchor()`) is a *single* PBD distance constraint applied in isolation — no bracing diagonals like `materializeBox()`/`materializeCircle()` — so the connected bodies stay free to rotate around it each step. `restLength = 0.0` gives a pin joint. Anchor mode (`addJointAnchor`) connects a point to a fixed `[x, y]` world coordinate instead of a second point; the anchor is treated as infinite mass and never moves, so 100% of the correction lands on the point (mirrors `constraint::solve()` with `mb → ∞`). Joints are solved in `field::solveConstraints()` alongside `$constraints` and round-trip through `field.json` (`joints` key) the same way constraints do. Not drawn by `render.php` — rendering is unchanged.
 
 - **Scene JSON format** (render.php `?scene=...`):
   ```json

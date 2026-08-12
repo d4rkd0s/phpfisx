@@ -4,6 +4,7 @@ namespace phpfisx\areas;
 use \phpfisx\entities\point as point;
 use \phpfisx\entities\line as line;
 use \phpfisx\entities\constraint as constraint;
+use \phpfisx\entities\joint as joint;
 
 class field {
     private $TURBULENCE_LEVEL = 1000;
@@ -17,6 +18,7 @@ class field {
     private $points = array();
     private $lines = array();
     private array $constraints = [];
+    private array $joints = [];
     private array $shapeBlueprints = [];
     private array $staticLines = [];
     private ?array $spawnZone = null;
@@ -91,6 +93,29 @@ class field {
             min($x1, $x2), min($y1, $y2),
             max($x1, $x2), max($y1, $y2),
         ];
+    }
+
+    /**
+     * Connect two points with a rotating hinge joint (PBD distance constraint
+     * with no bracing — the connection is free to swing/rotate, unlike the
+     * rigid multi-constraint shapes built by materializeBox()/materializeCircle()).
+     * @param float $restLength Pass -1.0 (default) to auto-calculate from current distance. 0.0 = pin joint.
+     */
+    public function addJoint(point $a, point $b, float $restLength = -1.0): void {
+        $this->joints[] = new joint($a, $b, $restLength);
+    }
+
+    /**
+     * Pin a point to a fixed world-space anchor with a rotating hinge joint.
+     * The anchor never moves (infinite mass) — the point swings freely around it.
+     * @param float $restLength Pass -1.0 (default) to auto-calculate from current distance. 0.0 = pin joint.
+     */
+    public function addJointAnchor(point $a, float $anchorX, float $anchorY, float $restLength = -1.0): void {
+        $this->joints[] = new joint($a, null, $restLength, [$anchorX, $anchorY]);
+    }
+
+    public function getJoints(): array {
+        return $this->joints;
     }
 
     private function setGravity($gravity) {
@@ -217,6 +242,12 @@ class field {
                 'boundary'    => $c->isBoundary(),
                 'restitution' => $c->getConstraintRestitution(),
             ], $this->constraints),
+            "joints" => array_map(fn($j) => [
+                'a_id'   => $j->getA()->getID(),
+                'b_id'   => $j->isAnchored() ? null : $j->getB()->getID(),
+                'anchor' => $j->getAnchor(),
+                'rest'   => $j->getRestLength(),
+            ], $this->joints),
         ]));
         fclose($fp);
     }
@@ -252,6 +283,18 @@ class field {
                     $rc['boundary']    ?? true,
                     $rc['restitution'] ?? -1.0
                 );
+            }
+        }
+
+        // Rebuild joints from serialized topology using point IDs
+        $this->joints = [];
+        foreach ($disk['joints'] ?? [] as $rj) {
+            if (!isset($pointMap[$rj['a_id']])) continue;
+            if ($rj['b_id'] !== null) {
+                if (!isset($pointMap[$rj['b_id']])) continue;
+                $this->joints[] = new joint($pointMap[$rj['a_id']], $pointMap[$rj['b_id']], $rj['rest']);
+            } elseif ($rj['anchor'] !== null) {
+                $this->joints[] = new joint($pointMap[$rj['a_id']], null, $rj['rest'], $rj['anchor']);
             }
         }
 
@@ -364,6 +407,9 @@ class field {
             foreach ($this->constraints as $c) {
                 $c->solve();
             }
+            foreach ($this->joints as $j) {
+                $j->solve();
+            }
         }
     }
 
@@ -431,7 +477,7 @@ class field {
         foreach ($this->points as $point) {
             $point->integrate();
         }
-        if (!empty($this->constraints)) {
+        if (!empty($this->constraints) || !empty($this->joints)) {
             foreach ($this->points as $point) {
                 $point->savePreviousPosition();
             }
