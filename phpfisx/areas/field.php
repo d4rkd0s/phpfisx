@@ -5,6 +5,7 @@ use \phpfisx\entities\point as point;
 use \phpfisx\entities\line as line;
 use \phpfisx\entities\constraint as constraint;
 use \phpfisx\entities\joint as joint;
+use \phpfisx\entities\vector as vector;
 
 class field {
     private $TURBULENCE_LEVEL = 1000;
@@ -512,6 +513,15 @@ class field {
      * Static lines have infinite mass, so the impulse formula simplifies:
      *   dv = -(1+e) * (v·n)   (the point's normal-component velocity gets reflected)
      * Mass cancels entirely — heavier particles bounce just as high as lighter ones.
+     *
+     * Combines two detection passes per point/line pair:
+     *   1. Swept (continuous): does the segment the point traveled THIS step
+     *      (pre-integrate position -> current position) cross the line? Catches
+     *      fast movers that would otherwise tunnel straight through in one step.
+     *   2. Proximity (discrete): is the point's current position within
+     *      collisionRadius of the line? Catches slow grazing contact that
+     *      never crosses the line at all.
+     * Only one of the two applies a response per line, to avoid double-counting.
      */
     private function resolveStaticLineCollisions(): void {
         if (empty($this->staticLines)) return;
@@ -519,9 +529,7 @@ class field {
         $radius = $this->collisionRadius;
 
         foreach ($this->points as $p) {
-            $px = $p->getX();
-            $py = $p->getY();
-            $vp = $p->getVelocity();
+            [$prevX, $prevY] = $p->getPreIntegratePosition();
 
             foreach ($this->staticLines as [$x1, $y1, $x2, $y2, $lineE]) {
                 $e   = ($lineE >= 0.0) ? $lineE : $this->restitution;
@@ -529,36 +537,123 @@ class field {
                 $ab2 = $abx * $abx + $aby * $aby;
                 if ($ab2 < 0.0001) continue;
 
-                $apx = $px - $x1; $apy = $py - $y1;
-                $t   = max(0.0, min(1.0, ($apx * $abx + $apy * $aby) / $ab2));
-                $cpx = $x1 + $t * $abx;
-                $cpy = $y1 + $t * $aby;
-
-                $dx   = $px - $cpx;
-                $dy   = $py - $cpy;
-                $dist = sqrt($dx * $dx + $dy * $dy);
-
-                if ($dist >= $radius || $dist < 0.0001) continue;
-
-                $nx = $dx / $dist;
-                $ny = $dy / $dist;
-
-                // Relative velocity along normal (wall is stationary)
-                $rvn = $vp->x * $nx + $vp->y * $ny;
-                if ($rvn >= 0) continue; // already separating
-
-                // Infinite-mass wall: mass cancels → dv = -(1+e)*rvn
-                $dv = -(1.0 + $e) * $rvn;
-                $vp->x += $dv * $nx;
-                $vp->y += $dv * $ny;
-
-                // Push point clear of the surface
-                $overlap = $radius - $dist;
-                $p->setCoords($px + $nx * $overlap, $py + $ny * $overlap);
                 $px = $p->getX();
                 $py = $p->getY();
+                $vp = $p->getVelocity();
+
+                $resolved = $this->resolveSweptLineCollision(
+                    $p, $vp, $prevX, $prevY, $px, $py, $x1, $y1, $x2, $y2, $abx, $aby, $ab2, $radius, $e
+                );
+
+                if (!$resolved) {
+                    $this->resolveProximityLineCollision(
+                        $p, $vp, $px, $py, $x1, $y1, $abx, $aby, $ab2, $radius, $e
+                    );
+                }
             }
         }
+    }
+
+    /**
+     * resolveSweptLineCollision — Continuous check: does the segment the point
+     * traveled this step (prev -> current) cross the static line segment?
+     * Returns true if a collision was detected and handled (whether or not a
+     * velocity response was applied — a detected-but-separating hit still
+     * counts as "handled" so the proximity pass doesn't double up on it).
+     */
+    private function resolveSweptLineCollision(
+        point $p, vector $vp,
+        float $prevX, float $prevY, float $px, float $py,
+        float $x1, float $y1, float $x2, float $y2,
+        float $abx, float $aby, float $ab2,
+        float $radius, float $e
+    ): bool {
+        $rx = $px - $prevX;
+        $ry = $py - $prevY;
+        if (abs($rx) < 0.0001 && abs($ry) < 0.0001) return false; // point didn't move this step
+
+        $denom = $rx * $aby - $ry * $abx;
+        if (abs($denom) < 0.0000001) return false; // parallel, no unique intersection
+
+        $qpx = $x1 - $prevX;
+        $qpy = $y1 - $prevY;
+        $t = ($qpx * $aby - $qpy * $abx) / $denom;
+        $u = ($qpx * $ry - $qpy * $rx) / $denom;
+
+        if ($t < 0.0 || $t > 1.0 || $u < 0.0 || $u > 1.0) return false; // no crossing this step
+
+        // Point on the line where the crossing happened
+        $cpx = $x1 + $u * $abx;
+        $cpy = $y1 + $u * $aby;
+
+        // Normal points from the line toward the side the point approached from
+        $dx = $prevX - $cpx;
+        $dy = $prevY - $cpy;
+        $dist = sqrt($dx * $dx + $dy * $dy);
+        if ($dist < 0.0001) {
+            // Started exactly on the line — fall back to a perpendicular of the line
+            $len = sqrt($ab2);
+            $nx = -$aby / $len;
+            $ny = $abx / $len;
+        } else {
+            $nx = $dx / $dist;
+            $ny = $dy / $dist;
+        }
+
+        $ix = $prevX + $t * $rx;
+        $iy = $prevY + $t * $ry;
+
+        $this->applyLineResponse($p, $vp, $ix, $iy, $nx, $ny, $radius, $e);
+        return true;
+    }
+
+    /**
+     * resolveProximityLineCollision — Discrete check: is the point's current
+     * position within collisionRadius of the line? Handles slow-moving/grazing
+     * contact that the swept pass won't catch because the point never actually
+     * crosses the line within a single step.
+     */
+    private function resolveProximityLineCollision(
+        point $p, vector $vp, float $px, float $py,
+        float $x1, float $y1, float $abx, float $aby, float $ab2,
+        float $radius, float $e
+    ): void {
+        $apx = $px - $x1; $apy = $py - $y1;
+        $t   = max(0.0, min(1.0, ($apx * $abx + $apy * $aby) / $ab2));
+        $cpx = $x1 + $t * $abx;
+        $cpy = $y1 + $t * $aby;
+
+        $dx   = $px - $cpx;
+        $dy   = $py - $cpy;
+        $dist = sqrt($dx * $dx + $dy * $dy);
+
+        if ($dist >= $radius || $dist < 0.0001) return;
+
+        $nx = $dx / $dist;
+        $ny = $dy / $dist;
+
+        $this->applyLineResponse($p, $vp, $px, $py, $nx, $ny, $radius, $e);
+    }
+
+    /**
+     * applyLineResponse — Shared collision response: reflects the point's
+     * velocity along the surface normal (if approaching) and places it
+     * collisionRadius clear of the contact point along that normal.
+     */
+    private function applyLineResponse(
+        point $p, vector $vp, float $cx, float $cy, float $nx, float $ny, float $radius, float $e
+    ): void {
+        // Relative velocity along normal (wall is stationary)
+        $rvn = $vp->x * $nx + $vp->y * $ny;
+        if ($rvn >= 0) return; // already separating — no response, matches prior behavior
+
+        // Infinite-mass wall: mass cancels → dv = -(1+e)*rvn
+        $dv = -(1.0 + $e) * $rvn;
+        $vp->x += $dv * $nx;
+        $vp->y += $dv * $ny;
+
+        // Place the point just clear of the surface along the normal
+        $p->setCoords($cx + $nx * $radius, $cy + $ny * $radius);
     }
 
     public function runFisx() {
@@ -566,10 +661,17 @@ class field {
         $this->applyGravity();     // all points
         $this->resolvePointCollisions();
         $this->resolveEdgeCollisions();
-        $this->resolveStaticLineCollisions();
+        foreach ($this->points as $point) {
+            $point->markPreIntegratePosition(); // snapshot before this step's move, for swept static-line checks
+        }
         foreach ($this->points as $point) {
             $point->integrate();
         }
+        // Runs AFTER integrate() so it can sweep the segment the point actually
+        // traveled this step (pre-integrate position -> post-integrate position)
+        // against each static line, catching fast movers that would otherwise
+        // tunnel straight through between one proximity check and the next.
+        $this->resolveStaticLineCollisions();
         if (!empty($this->constraints) || !empty($this->joints)) {
             foreach ($this->points as $point) {
                 $point->savePreviousPosition();

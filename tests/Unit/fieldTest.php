@@ -188,6 +188,58 @@ it('static line: no response when point moving away', function () {
     expect($p->getVelocity()->y)->toBe(-5.0); // unchanged
 });
 
+it('static line: fast-moving point does not tunnel through in one step (swept detection)', function () {
+    // Horizontal static line at y=200. Point starts well above the proximity
+    // radius (30px away) with a downward velocity large enough (40px/step)
+    // that the OLD discrete/proximity-only check would let it land on the far
+    // side of the line in a single integrate() step with no detection at all.
+    $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 5.0, 1.0); // gravity off, friction=1, collisionRadius=5
+    $field->addStaticLine(0.0, 200.0, 500.0, 200.0);
+
+    $p = new point($field, 0, 'p', 250.0, 170.0, 0.0, 40.0, 1.0); // vy=40, would end at y=210 (past the line)
+
+    $pcRef = new \ReflectionProperty($field, 'pointCount');
+    $pcRef->setAccessible(true);
+    $pcRef->setValue($field, 1);
+
+    $ptsRef = new \ReflectionProperty($field, 'points');
+    $ptsRef->setAccessible(true);
+    $ptsRef->setValue($field, [$p]);
+
+    $run = new \ReflectionMethod($field, 'runFisx');
+    $run->setAccessible(true);
+    $run->invoke($field);
+
+    // Point must remain on the approach side of the line (y < 200), not tunnel through.
+    expect($p->getY())->toBeLessThan(200.0);
+    // And it should have bounced — velocity now points back away from the line (upward, negative).
+    expect($p->getVelocity()->y)->toBeLessThan(0);
+});
+
+it('static line: slow point still bounces via proximity check when it does not cross the line', function () {
+    // Point ends the step close to but not crossing the line — swept check
+    // won't fire (no crossing), proximity check must still catch it.
+    $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 10.0, 1.0);
+    $field->addStaticLine(0.0, 200.0, 500.0, 200.0);
+
+    $p = new point($field, 0, 'p', 250.0, 192.0, 0.0, 3.0, 1.0); // vy=3, ends at y=195, still above the line
+
+    $pcRef = new \ReflectionProperty($field, 'pointCount');
+    $pcRef->setAccessible(true);
+    $pcRef->setValue($field, 1);
+
+    $ptsRef = new \ReflectionProperty($field, 'points');
+    $ptsRef->setAccessible(true);
+    $ptsRef->setValue($field, [$p]);
+
+    $run = new \ReflectionMethod($field, 'runFisx');
+    $run->setAccessible(true);
+    $run->invoke($field);
+
+    expect($p->getY())->toBeLessThan(200.0);
+    expect($p->getVelocity()->y)->toBeLessThan(0);
+});
+
 it('edge collision: no response when point moving away from edge', function () {
     $field = new phpfisx_field([0, 1000, 0, 1000], 0, 0, 1.0, 10.0, 1.0);
 

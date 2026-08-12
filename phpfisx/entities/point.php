@@ -11,6 +11,8 @@ class point {
     private float $mass;
     private float $prevX = 0.0;
     private float $prevY = 0.0;
+    private float $preIntegrateX = 0.0;
+    private float $preIntegrateY = 0.0;
 
     public function __construct(
         \phpfisx\areas\field $field,
@@ -38,6 +40,12 @@ class point {
             $this->setCoords($existing_x, $existing_y);
             $this->velocity = new vector($existing_vx, $existing_vy);
         }
+
+        // Default the pre-integration snapshot to the starting position so a
+        // swept check performed before the first integrate() call degenerates
+        // to a zero-length segment (i.e. proximity-only), never a phantom sweep.
+        $this->preIntegrateX = $this->x;
+        $this->preIntegrateY = $this->y;
     }
 
     public function getMass(): float {
@@ -139,6 +147,28 @@ class point {
     public function savePreviousPosition(): void {
         $this->prevX = $this->x;
         $this->prevY = $this->y;
+    }
+
+    /**
+     * markPreIntegratePosition — Snapshot position before integrate() moves the point.
+     *
+     * Independent of the constraint-solving prevX/prevY above (those only get
+     * populated when constraints/joints exist in the scene). This snapshot is
+     * always taken every step so continuous/swept collision checks against
+     * static lines work correctly even in scenes with zero constraints/joints.
+     * Call this immediately before integrate() each step.
+     */
+    public function markPreIntegratePosition(): void {
+        $this->preIntegrateX = $this->x;
+        $this->preIntegrateY = $this->y;
+    }
+
+    /**
+     * getPreIntegratePosition — The point's position before its most recent
+     * integrate() call, for swept (continuous) collision detection.
+     */
+    public function getPreIntegratePosition(): array {
+        return [$this->preIntegrateX, $this->preIntegrateY];
     }
 
     /**
