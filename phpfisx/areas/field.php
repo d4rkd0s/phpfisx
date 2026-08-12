@@ -20,8 +20,13 @@ class field {
     private array $constraints = [];
     private array $joints = [];
     private array $shapeBlueprints = [];
+    private array $shapePoints = [];   // blueprint index => point[] materialized for that shape
+    private array $jointBlueprints = [];
     private array $staticLines = [];
     private ?array $spawnZone = null;
+    private bool $trailsEnabled = false;
+    private int $trailLength = 10;
+    private array $trailHistory = [];  // point id => [[x,y], ...] most-recent-last, capped at trailLength
     private $gravity;
     private float $friction;
     private float $collisionRadius;
@@ -116,6 +121,44 @@ class field {
 
     public function getJoints(): array {
         return $this->joints;
+    }
+
+    /**
+     * Register a joint to be materialized once shapes exist (step 1), since a
+     * joint may need to attach to a point that belongs to a not-yet-built
+     * box/circle. Mirrors the shapeBlueprints deferred-materialization pattern.
+     *
+     * @param ?int  $fromBlueprintIdx Index into shapeBlueprints (see spawnBox/spawnCircle
+     *                                 call order) to attach the "from" end to, or null for
+     *                                 a fixed world-space anchor.
+     * @param float $fromX/$fromY     When $fromBlueprintIdx is set: the point on that
+     *                                 shape's click position, used to pick the nearest
+     *                                 materialized point. When null: the anchor coordinate.
+     * @param ?int  $toBlueprintIdx   Same as above for the "to" end.
+     * @param float $restLength       -1.0 = auto-calculate from initial distance.
+     */
+    public function addJointBlueprint(
+        ?int $fromBlueprintIdx, float $fromX, float $fromY,
+        ?int $toBlueprintIdx,   float $toX,   float $toY,
+        float $restLength = -1.0
+    ): void {
+        $this->jointBlueprints[] = [
+            'fromIdx' => $fromBlueprintIdx, 'fromX' => $fromX, 'fromY' => $fromY,
+            'toIdx'   => $toBlueprintIdx,   'toX'   => $toX,   'toY'   => $toY,
+            'rest'    => $restLength,
+        ];
+    }
+
+    public function getJointBlueprints(): array {
+        return $this->jointBlueprints;
+    }
+
+    public function setTrailsEnabled(bool $enabled): void {
+        $this->trailsEnabled = $enabled;
+    }
+
+    public function getTrailsEnabled(): bool {
+        return $this->trailsEnabled;
     }
 
     private function setGravity($gravity) {
@@ -336,16 +379,17 @@ class field {
 
     private function materializeShapes(): void {
         $this->constraints = [];
-        foreach ($this->shapeBlueprints as $bp) {
+        $this->shapePoints = [];
+        foreach ($this->shapeBlueprints as $i => $bp) {
             $r = $bp['restitution'] ?? -1.0;
-            match ($bp['type']) {
+            $this->shapePoints[$i] = match ($bp['type']) {
                 'box'    => $this->materializeBox($bp['cx'], $bp['cy'], $bp['w'], $bp['h'], $bp['mass'], $r),
                 'circle' => $this->materializeCircle($bp['cx'], $bp['cy'], $bp['r'], $bp['n'], $bp['mass'], $r),
             };
         }
     }
 
-    private function materializeBox(float $cx, float $cy, float $w, float $h, float $mass, float $restitution = -1.0): void {
+    private function materializeBox(float $cx, float $cy, float $w, float $h, float $mass, float $restitution = -1.0): array {
         $hw = $w / 2.0;
         $hh = $h / 2.0;
 
@@ -361,9 +405,11 @@ class field {
         $this->constraints[] = new constraint($b, $d, -1.0, true,  $restitution);
         $this->constraints[] = new constraint($a, $d, -1.0, false, -1.0); // diagonal — never collides
         $this->constraints[] = new constraint($b, $c, -1.0, false, -1.0); // diagonal — never collides
+
+        return [$a, $b, $c, $d];
     }
 
-    private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass, float $restitution = -1.0): void {
+    private function materializeCircle(float $cx, float $cy, float $r, int $n, float $mass, float $restitution = -1.0): array {
         $pts = [];
         for ($i = 0; $i < $n; $i++) {
             $angle = (2.0 * M_PI * $i) / $n;
@@ -380,6 +426,53 @@ class field {
         for ($i = 0; $i < $half; $i++) {
             $this->constraints[] = new constraint($pts[$i], $pts[$i + $half], -1.0, false, -1.0);
         }
+
+        return $pts;
+    }
+
+    /**
+     * Resolve every registered joint blueprint into a real joint, once
+     * shapePoints exist. A shape-attached endpoint resolves to the
+     * materialized point on that shape closest to the clicked (x, y) —
+     * this is how a joint picks "which corner of the box" / "which point
+     * on the circle" to hinge from without the editor needing to know
+     * about materialized point topology. An endpoint with no shape index
+     * is a fixed world-space anchor. A joint with two anchor endpoints has
+     * nothing to simulate (both ends immovable) and is skipped.
+     */
+    private function materializeJoints(): void {
+        $this->joints = [];
+        foreach ($this->jointBlueprints as $jb) {
+            $a = $this->resolveJointEndpointPoint($jb['fromIdx'], $jb['fromX'], $jb['fromY']);
+            $b = $this->resolveJointEndpointPoint($jb['toIdx'],   $jb['toX'],   $jb['toY']);
+
+            if ($a !== null && $b !== null) {
+                $this->addJoint($a, $b, $jb['rest']);
+            } elseif ($a !== null) {
+                $this->addJointAnchor($a, $jb['toX'], $jb['toY'], $jb['rest']);
+            } elseif ($b !== null) {
+                $this->addJointAnchor($b, $jb['fromX'], $jb['fromY'], $jb['rest']);
+            }
+            // both anchored (both null) — nothing movable to connect, skip
+        }
+    }
+
+    private function resolveJointEndpointPoint(?int $blueprintIdx, float $x, float $y): ?point {
+        if ($blueprintIdx === null || empty($this->shapePoints[$blueprintIdx])) {
+            return null;
+        }
+        $best     = null;
+        $bestDist = INF;
+        foreach ($this->shapePoints[$blueprintIdx] as $p) {
+            $dx = $p->getX() - $x;
+            $dy = $p->getY() - $y;
+            $d  = $dx * $dx + $dy * $dy;
+            if ($d < $bestDist) {
+                $bestDist = $d;
+                $best     = $p;
+            }
+        }
+        return $best;
     }
 
     /** Create a point, add it to the field, and return it. */
@@ -649,6 +742,7 @@ class field {
             $this->resetDisk();
             $this->generatePoints();
             $this->materializeShapes();
+            $this->materializeJoints();
         }
         // if the step is n and n-1 = last step, then load points from file
         else if($this->getStep()-1 === $this->getLastStep()) {
@@ -666,6 +760,32 @@ class field {
         $this->persistToDisk();
     }
 
+    /**
+     * Append each point's current position to its trail history, capped at
+     * trailLength (oldest dropped first). Kept on the field object across the
+     * whole visualize() loop — trails are a playback/rendering concern only,
+     * never persisted to field.json. Pure state mutation, no GD — testable
+     * directly via reflection.
+     */
+    private function pushTrailHistory(): void {
+        foreach ($this->points as $p) {
+            $id = $p->getID();
+            if (!isset($this->trailHistory[$id])) {
+                $this->trailHistory[$id] = [];
+            }
+            $this->trailHistory[$id][] = [$p->getX(), $p->getY()];
+            if (count($this->trailHistory[$id]) > $this->trailLength) {
+                $this->trailHistory[$id] = array_slice($this->trailHistory[$id], -$this->trailLength);
+            }
+        }
+    }
+
+    private function drawDashedLine($gd, int $x1, int $y1, int $x2, int $y2, int $color): void {
+        $style = array_merge(array_fill(0, 6, $color), array_fill(0, 5, IMG_COLOR_TRANSPARENT));
+        imagesetstyle($gd, $style);
+        imageline($gd, $x1, $y1, $x2, $y2, IMG_COLOR_STYLED);
+    }
+
     public function visualize() {
         $border = 2;
         $frames = [];
@@ -673,13 +793,17 @@ class field {
         for ($step = 1; $step <= $this->steps; $step++) {
             $this->setStep($step);
             $this->calculate();
+            if ($this->trailsEnabled) {
+                $this->pushTrailHistory();
+            }
 
-            $gd    = imagecreatetruecolor($this->x_max, $this->y_max);
-            $white = imagecolorallocate($gd, 255, 255, 255);
-            $gray  = imagecolorallocate($gd, 245, 245, 245);
-            $black = imagecolorallocate($gd, 0, 0, 0);
-            $blue  = imagecolorallocate($gd, 30, 80, 200);
-            $red   = imagecolorallocate($gd, 210, 50, 35);
+            $gd     = imagecreatetruecolor($this->x_max, $this->y_max);
+            $white  = imagecolorallocate($gd, 255, 255, 255);
+            $gray   = imagecolorallocate($gd, 245, 245, 245);
+            $black  = imagecolorallocate($gd, 0, 0, 0);
+            $blue   = imagecolorallocate($gd, 30, 80, 200);
+            $red    = imagecolorallocate($gd, 210, 50, 35);
+            $orange = imagecolorallocate($gd, 255, 150, 0);
 
             imagefilledrectangle($gd, 0, 0, $this->getXMax(), $this->getYMax(), $black);
             imagefilledrectangle($gd, $border, $border, $this->getXMax() - $border * 1.5, $this->getYMax() - $border * 1.5, $white);
@@ -699,6 +823,41 @@ class field {
                     (int)round($c->getB()->getX()), (int)round($c->getB()->getY()),
                     $blue
                 );
+            }
+
+            // Joints — dashed orange line + small pivot dot at each end,
+            // matching the editor's visual language for the 'joint' shape type.
+            foreach ($this->joints as $j) {
+                $ax = (int)round($j->getA()->getX());
+                $ay = (int)round($j->getA()->getY());
+                if ($j->isAnchored()) {
+                    [$bx, $by] = $j->getAnchor();
+                    $bx = (int)round($bx);
+                    $by = (int)round($by);
+                } else {
+                    $bx = (int)round($j->getB()->getX());
+                    $by = (int)round($j->getB()->getY());
+                }
+                $this->drawDashedLine($gd, $ax, $ay, $bx, $by, $orange);
+                imagefilledellipse($gd, $ax, $ay, 5, 5, $orange);
+                imagefilledellipse($gd, $bx, $by, 5, 5, $orange);
+            }
+
+            // Motion trails — fading dot history behind each point, oldest = most transparent
+            if ($this->trailsEnabled) {
+                $trailColors = [];
+                for ($i = 0; $i < $this->trailLength; $i++) {
+                    $alpha = (int)round(20 + ($i / max(1, $this->trailLength - 1)) * 100);
+                    $trailColors[$i] = imagecolorallocatealpha($gd, 0, 0, 0, $alpha);
+                }
+                foreach ($this->points as $point) {
+                    $history = $this->trailHistory[$point->getID()] ?? [];
+                    $n       = count($history);
+                    for ($i = 0; $i < $n; $i++) {
+                        $colorIdx = min($i, count($trailColors) - 1);
+                        imagesetpixel($gd, (int)round($history[$i][0]), (int)round($history[$i][1]), $trailColors[$colorIdx]);
+                    }
+                }
             }
 
             foreach ($this->points as $point) {

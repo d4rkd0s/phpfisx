@@ -17,8 +17,17 @@ if (!empty($_GET['scene'])) {
     $field = new field([0, 500, 0, 500], $gravity, 4, $friction, 5.0, $restitution);
     $field->desiredPointCount($points);
     $field->setSteps($steps);
+    $field->setTrailsEnabled(!empty($settings['trails']));
 
-    foreach ($scene['shapes'] ?? [] as $s) {
+    // Maps a scene['shapes'] index to the field's shapeBlueprints index, so
+    // 'joint' entries (processed in a second pass below, since a joint can
+    // reference a shape appearing anywhere in the array) can resolve their
+    // shapeIndex references to the right materialized body.
+    $shapeBlueprintIndex = [];
+    $blueprintCounter    = 0;
+    $jointEntries        = [];
+
+    foreach ($scene['shapes'] ?? [] as $i => $s) {
         switch ($s['type'] ?? '') {
             case 'box':
                 $field->spawnBox(
@@ -29,6 +38,7 @@ if (!empty($_GET['scene'])) {
                     (float)($s['mass']        ?? 3.0),
                     (float)($s['restitution'] ?? -1.0)
                 );
+                $shapeBlueprintIndex[$i] = $blueprintCounter++;
                 break;
             case 'circle':
                 $field->spawnCircle(
@@ -39,6 +49,7 @@ if (!empty($_GET['scene'])) {
                     (float)($s['mass']        ?? 1.5),
                     (float)($s['restitution'] ?? -1.0)
                 );
+                $shapeBlueprintIndex[$i] = $blueprintCounter++;
                 break;
             case 'line':
                 $field->addStaticLine(
@@ -55,7 +66,30 @@ if (!empty($_GET['scene'])) {
                     (float)($s['x2'] ?? 500), (float)($s['y2'] ?? 500)
                 );
                 break;
+            case 'joint':
+                $jointEntries[] = $s;
+                break;
         }
+    }
+
+    // Second pass: joints reference shape indices from the array above, which
+    // must already be fully mapped before resolving (a joint can be defined
+    // before or after the shapes it connects).
+    foreach ($jointEntries as $j) {
+        $from = $j['from'] ?? [];
+        $to   = $j['to']   ?? [];
+
+        $fromShapeIdx = $from['shapeIndex'] ?? null;
+        $toShapeIdx   = $to['shapeIndex']   ?? null;
+
+        $fromBlueprintIdx = $fromShapeIdx !== null ? ($shapeBlueprintIndex[$fromShapeIdx] ?? null) : null;
+        $toBlueprintIdx   = $toShapeIdx   !== null ? ($shapeBlueprintIndex[$toShapeIdx]   ?? null) : null;
+
+        $field->addJointBlueprint(
+            $fromBlueprintIdx, (float)($from['x'] ?? 0), (float)($from['y'] ?? 0),
+            $toBlueprintIdx,   (float)($to['x']   ?? 0), (float)($to['y']   ?? 0),
+            (float)($j['rest'] ?? -1.0)
+        );
     }
 
     $field->visualize();
