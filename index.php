@@ -194,6 +194,35 @@
             margin-top: 2px;
         }
         .prop-reset:hover { color: #888; }
+
+        /* ── Legend ── */
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            font-size: 11px;
+            color: #888;
+        }
+        .legend .item { display: flex; align-items: center; gap: 5px; }
+        .legend i {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .legend i.dash {
+            background: transparent;
+            border: 1.5px dashed #ff9600;
+            border-radius: 0;
+        }
+
+        /* ── Trails checkbox row ── */
+        .row.checkbox-row { display: flex; align-items: center; gap: 7px; margin-bottom: 13px; }
+        .row.checkbox-row label { margin: 0; font-size: 12px; color: #bbb; cursor: pointer; }
+        .row.checkbox-row input[type=checkbox] { accent-color: #5bd565; cursor: pointer; width: 14px; height: 14px; }
     </style>
 </head>
 <body>
@@ -209,10 +238,22 @@
     <button class="tbtn"        data-tool="circle" title="[C]">○ Circle</button>
     <button class="tbtn"        data-tool="line"   title="[L]">╱ Ramp</button>
     <button class="tbtn"        data-tool="spawn"  title="[Z]">◈ Spawn Zone</button>
+    <button class="tbtn"        data-tool="joint"  title="[J]">┄ Joint</button>
     <div class="sep"></div>
     <button class="tbtn"        data-tool="select" title="[V]">↖ Select</button>
     <div class="sep"></div>
+    <button class="tbtn" id="save-btn" title="Save scene to this browser">💾 Save</button>
+    <button class="tbtn" id="load-btn" title="Load scene saved in this browser">📂 Load</button>
+    <div class="sep"></div>
     <button class="tbtn danger" id="clear-btn">✕ Clear</button>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+    <span class="item"><i style="background:#1e50c8"></i> Box / Circle</span>
+    <span class="item"><i style="background:#cc3020"></i> Ramp</span>
+    <span class="item"><i style="background:rgba(91,213,101,0.55)"></i> Spawn Zone</span>
+    <span class="item"><i class="dash"></i> Joint</span>
 </div>
 
 <!-- Main area -->
@@ -253,6 +294,11 @@
                    oninput="document.getElementById('bounce-v').textContent=parseFloat(this.value).toFixed(2)">
         </div>
 
+        <div class="row checkbox-row">
+            <input type="checkbox" id="trails">
+            <label for="trails">Motion trails</label>
+        </div>
+
         <button id="run-btn">▶ Run Simulation</button>
         <button id="back-btn">◀ Back to Editor</button>
         <p class="status" id="status">Ready</p>
@@ -268,7 +314,7 @@
                 </label>
                 <input type="range" id="prop-mass" min="0.5" max="20" step="0.5" value="3.0">
             </div>
-            <div class="row">
+            <div class="row" id="prop-bounce-row">
                 <label>Bounciness
                     <span id="prop-bounce-v">Auto</span>
                     <span class="prop-reset" id="prop-bounce-reset" title="Reset to global default">↺ global</span>
@@ -288,8 +334,13 @@
     // ─── State ─────────────────────────────────────────────────────────────
     // shapes: {type:'box', cx,cy,w,h,mass,restitution} |
     //         {type:'circle', cx,cy,r,mass,restitution} |
-    //         {type:'line', x1,y1,x2,y2,restitution}
+    //         {type:'line', x1,y1,x2,y2,restitution} |
+    //         {type:'joint', from:{shapeIndex|null,x,y}, to:{shapeIndex|null,x,y}}
     // restitution: -1 = use field global; 0–1 = per-shape override
+    // joint endpoints: shapeIndex null = fixed world anchor at (x,y); shapeIndex set =
+    //   pivot on that shape, (x,y) is the click position used to pick the nearest
+    //   materialized point on that body once the simulation runs (see field.php).
+    const SAVE_KEY = 'phpfisx.scene.v1';
     let shapes     = [
         { type:'box',    cx:370, cy:340, w:90,  h:65,  mass:3.0, restitution:-1 },
         { type:'circle', cx:140, cy:360, r:38,  mass:1.5,        restitution:-1 },
@@ -303,6 +354,7 @@
     let moveOff    = null;   // { dx, dy } for drag-moving
     let mouse      = { x:0, y:0 };
     let mode       = 'edit'; // 'edit' | 'run'
+    let jointDraft = null;   // { shapeIndex, x, y } — first endpoint clicked, awaiting the second
 
     // ─── Elements ───────────────────────────────────────────────────────────
     const canvas  = document.getElementById('editor');
@@ -319,22 +371,75 @@
         btn.addEventListener('click', () => setTool(btn.dataset.tool));
     });
     document.getElementById('clear-btn').addEventListener('click', () => {
-        shapes = []; spawnZone = null; sel = null; drag = null;
+        shapes = []; spawnZone = null; sel = null; drag = null; jointDraft = null;
         refresh(); draw();
     });
 
+    document.getElementById('save-btn').addEventListener('click', () => {
+        const data = {
+            shapes, spawnZone,
+            settings: {
+                points:      +document.getElementById('npoints').value,
+                steps:       +document.getElementById('nsteps').value,
+                gravity:     +document.getElementById('gravity').value,
+                friction:    +document.getElementById('friction').value,
+                restitution: +document.getElementById('bounce').value,
+                trails:      document.getElementById('trails').checked,
+            },
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+        flashHint('Saved to this browser ✓');
+    });
+
+    document.getElementById('load-btn').addEventListener('click', () => {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) { flashHint('Nothing saved yet'); return; }
+        let data;
+        try { data = JSON.parse(raw); } catch (e) { flashHint('Saved scene is corrupted'); return; }
+
+        shapes    = Array.isArray(data.shapes) ? data.shapes : [];
+        spawnZone = data.spawnZone || null;
+        if (data.settings) {
+            setSliderValue('npoints',  data.settings.points,      'npoints-v',  v => v);
+            setSliderValue('nsteps',   data.settings.steps,       'nsteps-v',   v => v);
+            setSliderValue('gravity',  data.settings.gravity,     'gravity-v',  v => parseFloat(v).toFixed(1));
+            setSliderValue('friction', data.settings.friction,    'friction-v', v => parseFloat(v).toFixed(2));
+            setSliderValue('bounce',   data.settings.restitution, 'bounce-v',   v => parseFloat(v).toFixed(2));
+            document.getElementById('trails').checked = !!data.settings.trails;
+        }
+        sel = null; jointDraft = null; drag = null;
+        refresh(); draw();
+        flashHint('Loaded from this browser ✓');
+    });
+
+    function setSliderValue(id, val, labelId, fmt) {
+        if (val === undefined || val === null) return;
+        document.getElementById(id).value = val;
+        document.getElementById(labelId).textContent = fmt(val);
+    }
+
+    let flashTimer = null;
+    function flashHint(msg) {
+        clearTimeout(flashTimer);
+        hint.textContent = msg;
+        flashTimer = setTimeout(updateHint, 1600);
+    }
+
     function setTool(t) {
         tool = t;
+        jointDraft = null;
         document.querySelectorAll('.tbtn[data-tool]').forEach(b =>
             b.classList.toggle('active', b.dataset.tool === t));
         canvas.style.cursor = t === 'select' ? 'default' : 'crosshair';
         updateHint();
+        draw();
     }
 
     document.addEventListener('keydown', e => {
         if (e.target.tagName === 'INPUT') return;
-        const map = { b:'box', c:'circle', l:'line', z:'spawn', v:'select' };
+        const map = { b:'box', c:'circle', l:'line', z:'spawn', j:'joint', v:'select' };
         if (map[e.key]) { setTool(map[e.key]); return; }
+        if (e.key === 'Escape' && jointDraft) { jointDraft = null; draw(); return; }
         if ((e.key === 'Delete' || e.key === 'Backspace') && sel !== null) {
             if (sel === 'spawn') spawnZone = null;
             else shapes.splice(sel, 1);
@@ -358,12 +463,22 @@
             sel = hitTest(p.x, p.y);
             if (sel !== null) {
                 const s = sel === 'spawn' ? spawnZone : shapes[sel];
-                const cx = sel === 'spawn' || shapes[sel]?.type === 'line'
-                    ? (s.x1 + s.x2) / 2 : s.cx;
-                const cy = sel === 'spawn' || shapes[sel]?.type === 'line'
-                    ? (s.y1 + s.y2) / 2 : s.cy;
+                const isLineLike = sel === 'spawn' || shapes[sel]?.type === 'line' || shapes[sel]?.type === 'joint';
+                const cx = isLineLike ? (s.x1 !== undefined ? (s.x1 + s.x2) / 2 : (s.from.x + s.to.x) / 2) : s.cx;
+                const cy = isLineLike ? (s.y1 !== undefined ? (s.y1 + s.y2) / 2 : (s.from.y + s.to.y) / 2) : s.cy;
                 moveOff = { dx: p.x - cx, dy: p.y - cy };
                 drag = { sx: p.x, sy: p.y, moving: true };
+            }
+        } else if (tool === 'joint') {
+            const hit = hitTestJointable(p.x, p.y);
+            const endpoint = { shapeIndex: hit, x: p.x, y: p.y };
+            if (!jointDraft) {
+                jointDraft = endpoint;
+            } else {
+                shapes.push({ type: 'joint', from: jointDraft, to: endpoint });
+                jointDraft = null;
+                sel = null;
+                refresh();
             }
         } else {
             drag = { sx: p.x, sy: p.y };
@@ -389,6 +504,13 @@
                     const mx = (s.x1+s.x2)/2, my = (s.y1+s.y2)/2;
                     const ddx = nx - mx, ddy = ny - my;
                     s.x1 += ddx; s.y1 += ddy; s.x2 += ddx; s.y2 += ddy;
+                } else if (s.type === 'joint') {
+                    // Only free (unattached) endpoints move with the drag — an
+                    // endpoint pinned to a shape stays pinned to that shape's pivot.
+                    const mx = (s.from.x+s.to.x)/2, my = (s.from.y+s.to.y)/2;
+                    const ddx = nx - mx, ddy = ny - my;
+                    if (s.from.shapeIndex === null) { s.from.x += ddx; s.from.y += ddy; }
+                    if (s.to.shapeIndex   === null) { s.to.x   += ddx; s.to.y   += ddy; }
                 }
             }
         }
@@ -450,10 +572,28 @@
                 if (Math.hypot(x-s.cx, y-s.cy) <= s.r + 8) return i;
             } else if (s.type === 'line') {
                 if (segDist(x, y, s.x1, s.y1, s.x2, s.y2) < 8) return i;
+            } else if (s.type === 'joint') {
+                if (segDist(x, y, s.from.x, s.from.y, s.to.x, s.to.y) < 8) return i;
             }
         }
         if (spawnZone && x >= spawnZone.x1 && x <= spawnZone.x2 &&
             y >= spawnZone.y1 && y <= spawnZone.y2) return 'spawn';
+        return null;
+    }
+
+    // Only box/circle shapes are valid joint attachment points — a click on a
+    // ramp (already-static) or empty canvas becomes a fixed anchor instead.
+    function hitTestJointable(x, y) {
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            const s = shapes[i];
+            if (s.type !== 'box' && s.type !== 'circle') continue;
+            if (s.type === 'box') {
+                if (x >= s.cx-s.w/2-6 && x <= s.cx+s.w/2+6 &&
+                    y >= s.cy-s.h/2-6 && y <= s.cy+s.h/2+6) return i;
+            } else if (Math.hypot(x-s.cx, y-s.cy) <= s.r + 8) {
+                return i;
+            }
+        }
         return null;
     }
 
@@ -472,6 +612,7 @@
     const C_LINE   = '#cc3020';
     const C_SPAWN  = 'rgba(91,213,101,0.10)';
     const C_SPAWN_S= 'rgba(91,213,101,0.55)';
+    const C_JOINT  = '#ff9600';
 
     function draw() {
         ctx.clearRect(0, 0, 500, 500);
@@ -504,6 +645,22 @@
 
         // Drag preview
         if (drag && !drag.moving) drawPreview(drag.sx, drag.sy, mouse.x, mouse.y);
+
+        // Pending joint — first endpoint placed, awaiting the second click
+        if (tool === 'joint' && jointDraft) {
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = C_JOINT;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(jointDraft.x, jointDraft.y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            dot(ctx, jointDraft.x, jointDraft.y, C_JOINT);
+            ctx.restore();
+        }
     }
 
     function drawShape(s, selected) {
@@ -536,6 +693,21 @@
             ctx.stroke();
             dot(ctx, s.x1, s.y1, ctx.strokeStyle);
             dot(ctx, s.x2, s.y2, ctx.strokeStyle);
+
+        } else if (s.type === 'joint') {
+            // Dashed orange line + small pivot dot at each end — visually
+            // distinct from the solid blue/red rigid-constraint look, and
+            // matches the dashed orange rendering field.php draws in playback.
+            ctx.strokeStyle = selected ? C_SEL_S : C_JOINT;
+            ctx.lineWidth   = selected ? 3 : 2;
+            ctx.lineCap     = 'round';
+            ctx.setLineDash(selected ? [] : [6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(s.from.x, s.from.y); ctx.lineTo(s.to.x, s.to.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            dot(ctx, s.from.x, s.from.y, ctx.strokeStyle);
+            dot(ctx, s.to.x,   s.to.y,   ctx.strokeStyle);
         }
         ctx.restore();
     }
@@ -576,6 +748,7 @@
                 gravity:     +document.getElementById('gravity').value,
                 friction:    +document.getElementById('friction').value,
                 restitution: +document.getElementById('bounce').value,
+                trails:      document.getElementById('trails').checked,
             },
             shapes: [
                 ...shapes,
@@ -625,6 +798,7 @@
         circle: 'Drag to set radius · Click for default (r=32)',
         line:   'Drag to draw immovable ramp / wall',
         spawn:  'Drag to set particle spawn zone (one at a time)',
+        joint:  'Click first endpoint (shape or empty canvas) · Click second to connect · Esc to cancel',
         select: 'Click to select · Drag to move · Delete to remove',
     };
 
@@ -636,10 +810,12 @@
         const boxes   = shapes.filter(s => s.type === 'box').length;
         const circles = shapes.filter(s => s.type === 'circle').length;
         const lines   = shapes.filter(s => s.type === 'line').length;
+        const joints  = shapes.filter(s => s.type === 'joint').length;
         const parts = [];
         if (boxes)   parts.push(`${boxes} box${boxes>1?'es':''}`);
         if (circles) parts.push(`${circles} circle${circles>1?'s':''}`);
         if (lines)   parts.push(`${lines} ramp${lines>1?'s':''}`);
+        if (joints)  parts.push(`${joints} joint${joints>1?'s':''}`);
         if (!parts.length) parts.push('no shapes');
         parts.push(spawnZone ? '✓ spawn zone' : 'no spawn zone');
         info.innerHTML = '<strong>Scene:</strong> ' + parts.join(' · ');
@@ -650,6 +826,7 @@
     const propPanel      = document.getElementById('prop-panel');
     const propTitle      = document.getElementById('prop-title');
     const propMassRow    = document.getElementById('prop-mass-row');
+    const propBounceRow  = document.getElementById('prop-bounce-row');
     const propMassSlider = document.getElementById('prop-mass');
     const propMassVal    = document.getElementById('prop-mass-v');
     const propBounce     = document.getElementById('prop-bounce');
@@ -667,20 +844,23 @@
         propPanel.style.display = 'block';
 
         // Title
-        const labels = { box:'Box', circle:'Circle', line:'Ramp' };
+        const labels = { box:'Box', circle:'Circle', line:'Ramp', joint:'Joint' };
         propTitle.textContent = (labels[s.type] || s.type) + ' Properties';
 
-        // Mass (not applicable to static lines)
-        propMassRow.style.display = (s.type === 'line') ? 'none' : '';
-        if (s.type !== 'line') {
+        // Mass and bounciness don't apply to static lines or joints (a joint
+        // has no material of its own — it just pins two points/anchors together)
+        const isMaterial = (s.type !== 'line' && s.type !== 'joint');
+        propMassRow.style.display   = isMaterial ? '' : 'none';
+        propBounceRow.style.display = isMaterial ? '' : 'none';
+        if (isMaterial) {
             propMassSlider.value = s.mass ?? 3.0;
             propMassVal.textContent = parseFloat(propMassSlider.value).toFixed(1);
-        }
 
-        // Bounciness (-1 = auto/global)
-        const hasCustomBounce = (s.restitution ?? -1) >= 0;
-        propBounce.value = hasCustomBounce ? s.restitution : +document.getElementById('bounce').value;
-        updateBounceLabel();
+            // Bounciness (-1 = auto/global)
+            const hasCustomBounce = (s.restitution ?? -1) >= 0;
+            propBounce.value = hasCustomBounce ? s.restitution : +document.getElementById('bounce').value;
+            updateBounceLabel();
+        }
     }
 
     function updateBounceLabel() {
