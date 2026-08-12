@@ -70,20 +70,15 @@ php -S localhost:8080
 - Private properties/methods accessed via `ReflectionProperty` / `ReflectionMethod`
 - When injecting `staticLines` directly via reflection, use 5-element tuples: `[x1, y1, x2, y2, restitution]`
 
+### Known gaps
+
+Entity classes (`point`, `vector`, `line`, `circle`, `polygon`, `box`) mostly expose public
+properties rather than encapsulated getters/setters, and type hints are inconsistent across
+the codebase. Both are fine for the current scope but worth tightening if the engine grows
+past its current feature set.
+
 ---
 
-## Roadmap (current state)
+## Roadmap
 
-- [x] Velocity integration + wall boundary reflection  
-- [x] Friction (per-point damping)  
-- [x] Point-vs-point collision with mass-weighted impulse  
-- [x] Rigid bodies (box, circle) via PBD distance constraints  
-- [x] Global restitution coefficient  
-- [x] Point-vs-edge collision (soft body surface bouncing)  
-- [x] Static collision surfaces (`addStaticLine`)  
-- [x] Visual scene editor (drag-and-drop, Select/move/delete)  
-- [x] Per-shape materials (mass + restitution override per shape)  
-- [x] Spawn zone  
-- [ ] Live mode (WebSocket or SSE streaming — no page reload between steps)  
-- [ ] Joints / hinges  
-- [ ] Fluid / soft body mode  
+See `ROADMAP.md` for what's done and what's next.
