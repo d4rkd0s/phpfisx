@@ -19,10 +19,10 @@ Status of the physics engine and what's next. See `CLAUDE.md` for architecture a
 - Save / Load scene to browser localStorage — per-client only, no server-side persistence
 - Legend/key in the editor UI showing what each shape color means
 - Motion trails — optional checkbox in the Physics panel; when on, `field.php`'s playback draws a fading position history behind each point instead of a single dot
+- Live mode — `live.php` streams the simulation over Server-Sent Events, one step at a time, so the editor can draw each frame on a canvas as it's calculated instead of waiting for a full run to finish and reload. The editor's new "⚡ Live" button runs this path; "▶ Run Simulation" still uses `render.php`'s pre-baked GD/PNG playback for the static, shareable HTML output. Scene parsing was pulled out of `render.php` into `field::fromScene()` so both endpoints build a field the same way.
 
 ## Next
 
-- **Live mode** — WebSocket or SSE streaming so simulations play without a full page reload between steps
 - **Fluid / soft body mode** — mass-spring or SPH-based deformable simulation
 
 ## Later / exploratory

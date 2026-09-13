@@ -8,16 +8,17 @@
 
 ```
 phpfisx/
-  areas/field.php        — simulation world: spawn, step, visualize
+  areas/field.php        — simulation world: scene parsing, spawn, step, frame serialization, visualize
   entities/
     point.php            — particle with mass, velocity, boundary reflection
     constraint.php       — PBD distance constraint between two points
     joint.php            — PBD hinge: single distance constraint, rotation left free (see below)
     vector.php           — 2D math helpers
-render.php               — HTTP endpoint: runs simulation, returns HTML animation
-index.php                — browser scene editor (canvas drag-and-drop)
+render.php               — HTTP endpoint: runs simulation, returns pre-baked HTML animation
+live.php                 — HTTP endpoint: streams simulation steps over Server-Sent Events (see below)
+index.php                — browser scene editor (canvas drag-and-drop, Run + Live playback)
 boot.php                 — autoload + namespace bootstrap
-tests/Unit/              — Pest v1 unit tests (50 tests)
+tests/Unit/              — Pest v1 unit tests (87 tests)
 ```
 
 ### Key design decisions
@@ -48,6 +49,10 @@ tests/Unit/              — Pest v1 unit tests (50 tests)
   }
   ```
   A `joint`'s `from`/`to` each carry `shapeIndex` (index into this same `shapes` array, or `null`) **and** `x`/`y` — the click position. `x`/`y` is always present: when `shapeIndex` is set it's used to pick the nearest point on that shape once materialized; when `shapeIndex` is `null` it *is* the fixed anchor coordinate. Only `box`/`circle` shapes are valid joint attachment points in the editor — clicking a `line` (ramp) or empty canvas both produce an anchor endpoint, since ramps are already static/immovable.
+
+- **Scene builder shared by both HTTP endpoints**: `field::fromScene(array $scene): field` holds all the scene-JSON-parsing logic described above (shapes, static lines, spawn zones, the joint-blueprint two-pass resolution) as a static factory. Both `render.php` and `live.php` call it, so there's exactly one place that decides what a scene means — no risk of the two playback modes silently interpreting the same scene differently. It returns a configured-but-not-yet-materialized field; materialization still happens lazily on step 1 inside `calculate()`, same as before this existed.
+
+- **Live mode (`live.php`) — Server-Sent Events, not WebSockets**: chosen over a WebSocket server because SSE works over plain HTTP with the built-in PHP dev server and standard Apache/nginx setups, and needs no extra Composer dependency (no Ratchet, no Swoole) — consistent with this repo's "no extra runtime deps" approach. `live.php` calls `field::fromScene()`, then loops `calculate()` once per step (same physics as `render.php`), sending an `init` SSE event first (canvas bounds, static line geometry, total step count via `field::serializeStaticScene()`) and one `step` event per frame (`field::serializeFrame()` — point positions, boundary edges, joint endpoints, all rounded to 2 decimals). Both serialize methods are pure — no GD, no headers, no flush/sleep — so they're unit-tested directly; the transport concerns (headers, the step loop, `usleep()` pacing, `flush()`) stay in `live.php` itself and aren't covered by Pest (see "Testing conventions" below). `index.php`'s "⚡ Live" button opens an `EventSource` against `live.php?scene=...` and draws each frame onto a `<canvas>` with plain 2D context calls, styled to match `render.php`'s GD output (blue rigid-body edges, red static lines, dashed orange joints). "▶ Run Simulation" still points at `render.php` — that pre-baked GD/PNG path stays as the static, shareable/export-style output.
 
 - **Static-line collision detection is swept + proximity, not proximity-only**: `field::resolveStaticLineCollisions()` runs *after* `point::integrate()` each step and checks two things per point/line pair: (1) a swept/continuous test — does the segment from the point's pre-integrate position (`point::markPreIntegratePosition()`, captured every step regardless of whether constraints/joints exist) to its post-integrate position cross the static line segment this step? — and (2) the original proximity test — is the point's final position within `collisionRadius` of the line? Swept catches fast movers that would otherwise tunnel straight through a ramp in one step (velocity > ~`collisionRadius`/step); proximity catches slow/grazing contact that never actually crosses the line. Only one of the two applies a velocity/position response per line per point, via the shared `applyLineResponse()` helper, so they don't double up. Edge case: if a point crosses a static line but is already separating (`rvn >= 0`, e.g. it was already bounced by a different line/constraint earlier in the same step), neither pass applies a response — matches the pre-existing "only resolve if approaching" behavior, just extended to the swept path.
 
@@ -89,6 +94,21 @@ Entity classes (`point`, `vector`, `line`, `circle`, `polygon`, `box`) mostly ex
 properties rather than encapsulated getters/setters, and type hints are inconsistent across
 the codebase. Both are fine for the current scope but worth tightening if the engine grows
 past its current feature set.
+
+`field.php` (~1,230 lines) and `index.php` (~1,040 lines) are by far the largest files in the
+repo and keep growing with each feature — `field.php` now holds scene parsing, the physics
+loop, frame serialization, and GD rendering all in one class. Both still read clearly today,
+but a future feature (fluid/soft-body mode is next on the roadmap) is a reasonable trigger to
+split `field.php`'s GD-rendering code (`visualize()`, `renderAnimation()`, `drawDashedLine()`)
+into a separate renderer, since that code has nothing to do with the physics loop and doesn't
+need to live in the same class as `serializeFrame()`/`fromScene()`.
+
+`phpfisx/entities/box.php`, `circle.php`, `polygon.php`, `phpfisx/simulation.php`, and
+`phpfisx/simulation_2d.php` are unused by the current PBD engine — leftover scaffolding from
+an earlier SAT-collision design (nothing outside those five files references them, and
+`simulation_2d.php`'s class body is empty). They're harmless as-is but are dead weight for
+anyone reading the codebase for the first time; worth a cleanup pass or a decision to remove
+them.
 
 ---
 
