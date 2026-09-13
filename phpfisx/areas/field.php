@@ -62,6 +62,104 @@ class field {
         $this->setGravity($gravity);
     }
 
+    /**
+     * fromScene — Build a fully-configured (but not yet materialized) field
+     * from a scene JSON payload (see CLAUDE.md "Scene JSON format"). Shared
+     * by render.php (single-request GD playback) and live.php (SSE streaming)
+     * so the two transports can never drift on how a scene is interpreted.
+     * Materialization (shapes/joints becoming real points) still happens
+     * lazily on step 1 inside calculate(), same as before this existed.
+     */
+    public static function fromScene(array $scene): field {
+        $settings = $scene['settings'] ?? [];
+
+        $points      = max(1,   min(500,  (int)(   $settings['points']      ?? 80)));
+        $steps       = max(1,   min(200,  (int)(   $settings['steps']       ?? 50)));
+        $gravity     = max(0.0, min(20.0, (float)( $settings['gravity']     ?? 1.0)));
+        $friction    = max(0.0, min(1.0,  (float)( $settings['friction']    ?? 0.98)));
+        $restitution = max(0.0, min(1.0,  (float)( $settings['restitution'] ?? 0.7)));
+
+        $field = new field([0, 500, 0, 500], $gravity, 4, $friction, 5.0, $restitution);
+        $field->desiredPointCount($points);
+        $field->setSteps($steps);
+        $field->setTrailsEnabled(!empty($settings['trails']));
+
+        // Maps a scene['shapes'] index to the field's shapeBlueprints index, so
+        // 'joint' entries (processed in a second pass below, since a joint can
+        // reference a shape appearing anywhere in the array) can resolve their
+        // shapeIndex references to the right materialized body.
+        $shapeBlueprintIndex = [];
+        $blueprintCounter    = 0;
+        $jointEntries        = [];
+
+        foreach ($scene['shapes'] ?? [] as $i => $s) {
+            switch ($s['type'] ?? '') {
+                case 'box':
+                    $field->spawnBox(
+                        (float)($s['cx']          ?? 250),
+                        (float)($s['cy']          ?? 250),
+                        (float)($s['w']           ?? 60),
+                        (float)($s['h']           ?? 40),
+                        (float)($s['mass']        ?? 3.0),
+                        (float)($s['restitution'] ?? -1.0)
+                    );
+                    $shapeBlueprintIndex[$i] = $blueprintCounter++;
+                    break;
+                case 'circle':
+                    $field->spawnCircle(
+                        (float)($s['cx']          ?? 250),
+                        (float)($s['cy']          ?? 250),
+                        (float)($s['r']           ?? 30),
+                        (int)(  $s['n']           ?? 10),
+                        (float)($s['mass']        ?? 1.5),
+                        (float)($s['restitution'] ?? -1.0)
+                    );
+                    $shapeBlueprintIndex[$i] = $blueprintCounter++;
+                    break;
+                case 'line':
+                    $field->addStaticLine(
+                        (float)($s['x1']          ?? 0),
+                        (float)($s['y1']          ?? 0),
+                        (float)($s['x2']          ?? 100),
+                        (float)($s['y2']          ?? 100),
+                        (float)($s['restitution'] ?? -1.0)
+                    );
+                    break;
+                case 'spawn':
+                    $field->setSpawnZone(
+                        (float)($s['x1'] ?? 0),   (float)($s['y1'] ?? 0),
+                        (float)($s['x2'] ?? 500), (float)($s['y2'] ?? 500)
+                    );
+                    break;
+                case 'joint':
+                    $jointEntries[] = $s;
+                    break;
+            }
+        }
+
+        // Second pass: joints reference shape indices from the array above, which
+        // must already be fully mapped before resolving (a joint can be defined
+        // before or after the shapes it connects).
+        foreach ($jointEntries as $j) {
+            $from = $j['from'] ?? [];
+            $to   = $j['to']   ?? [];
+
+            $fromShapeIdx = $from['shapeIndex'] ?? null;
+            $toShapeIdx   = $to['shapeIndex']   ?? null;
+
+            $fromBlueprintIdx = $fromShapeIdx !== null ? ($shapeBlueprintIndex[$fromShapeIdx] ?? null) : null;
+            $toBlueprintIdx   = $toShapeIdx   !== null ? ($shapeBlueprintIndex[$toShapeIdx]   ?? null) : null;
+
+            $field->addJointBlueprint(
+                $fromBlueprintIdx, (float)($from['x'] ?? 0), (float)($from['y'] ?? 0),
+                $toBlueprintIdx,   (float)($to['x']   ?? 0), (float)($to['y']   ?? 0),
+                (float)($j['rest'] ?? -1.0)
+            );
+        }
+
+        return $field;
+    }
+
     public function getLines() {
         return $this->lines;
     }
@@ -880,6 +978,70 @@ class field {
                 $this->trailHistory[$id] = array_slice($this->trailHistory[$id], -$this->trailLength);
             }
         }
+    }
+
+    /**
+     * serializeStaticScene — Pure snapshot of the parts of the field that
+     * never change once a simulation starts: canvas bounds, step count, and
+     * static line geometry. live.php sends this once as the SSE 'init' event
+     * so per-step frames only need to carry moving data. No GD, no I/O.
+     */
+    public function serializeStaticScene(): array {
+        return [
+            'width'       => $this->x_max,
+            'height'      => $this->y_max,
+            'totalSteps'  => $this->steps,
+            'staticLines' => array_map(
+                fn($l) => [round($l[0], 2), round($l[1], 2), round($l[2], 2), round($l[3], 2)],
+                $this->staticLines
+            ),
+        ];
+    }
+
+    /**
+     * serializeFrame — Pure snapshot of the field's current point/edge/joint
+     * positions for one simulation step, as a plain array ready for
+     * json_encode(). No GD rendering, no headers, no flushing — that
+     * transport concern lives entirely in live.php's SSE loop, which is what
+     * makes this directly unit-testable (build a field, mutate its state,
+     * assert on the returned array).
+     *
+     * Coordinates are rounded to 2 decimal places to keep frame payloads
+     * small; SSE runs once per simulation step so precision beyond that
+     * isn't visually meaningful.
+     */
+    public function serializeFrame(): array {
+        $edges = [];
+        foreach ($this->constraints as $c) {
+            if (!$c->isBoundary()) continue;
+            $edges[] = [
+                round($c->getA()->getX(), 2), round($c->getA()->getY(), 2),
+                round($c->getB()->getX(), 2), round($c->getB()->getY(), 2),
+            ];
+        }
+
+        $joints = [];
+        foreach ($this->joints as $j) {
+            $ax = round($j->getA()->getX(), 2);
+            $ay = round($j->getA()->getY(), 2);
+            if ($j->isAnchored()) {
+                [$bx, $by] = $j->getAnchor();
+            } else {
+                $bx = $j->getB()->getX();
+                $by = $j->getB()->getY();
+            }
+            $joints[] = [$ax, $ay, round($bx, 2), round($by, 2)];
+        }
+
+        return [
+            'step'   => $this->getStep(),
+            'points' => array_map(
+                fn($p) => [round($p->getX(), 2), round($p->getY(), 2)],
+                array_values($this->points)
+            ),
+            'edges'  => $edges,
+            'joints' => $joints,
+        ];
     }
 
     private function drawDashedLine($gd, int $x1, int $y1, int $x2, int $y2, int $color): void {

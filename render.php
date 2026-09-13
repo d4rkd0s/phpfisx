@@ -4,94 +4,11 @@ require_once('boot.php');
 use phpfisx\areas\field as field;
 
 // ── Scene-based request (from editor) ────────────────────────────────────────
+// Scene parsing lives in field::fromScene() so this GD/HTML playback path and
+// live.php's SSE streaming path can never drift on how a scene is interpreted.
 if (!empty($_GET['scene'])) {
-    $scene    = json_decode($_GET['scene'], true) ?? [];
-    $settings = $scene['settings'] ?? [];
-
-    $points      = max(1,   min(500,  (int)(   $settings['points']      ?? 80)));
-    $steps       = max(1,   min(200,  (int)(   $settings['steps']       ?? 50)));
-    $gravity     = max(0.0, min(20.0, (float)( $settings['gravity']     ?? 1.0)));
-    $friction    = max(0.0, min(1.0,  (float)( $settings['friction']    ?? 0.98)));
-    $restitution = max(0.0, min(1.0,  (float)( $settings['restitution'] ?? 0.7)));
-
-    $field = new field([0, 500, 0, 500], $gravity, 4, $friction, 5.0, $restitution);
-    $field->desiredPointCount($points);
-    $field->setSteps($steps);
-    $field->setTrailsEnabled(!empty($settings['trails']));
-
-    // Maps a scene['shapes'] index to the field's shapeBlueprints index, so
-    // 'joint' entries (processed in a second pass below, since a joint can
-    // reference a shape appearing anywhere in the array) can resolve their
-    // shapeIndex references to the right materialized body.
-    $shapeBlueprintIndex = [];
-    $blueprintCounter    = 0;
-    $jointEntries        = [];
-
-    foreach ($scene['shapes'] ?? [] as $i => $s) {
-        switch ($s['type'] ?? '') {
-            case 'box':
-                $field->spawnBox(
-                    (float)($s['cx']          ?? 250),
-                    (float)($s['cy']          ?? 250),
-                    (float)($s['w']           ?? 60),
-                    (float)($s['h']           ?? 40),
-                    (float)($s['mass']        ?? 3.0),
-                    (float)($s['restitution'] ?? -1.0)
-                );
-                $shapeBlueprintIndex[$i] = $blueprintCounter++;
-                break;
-            case 'circle':
-                $field->spawnCircle(
-                    (float)($s['cx']          ?? 250),
-                    (float)($s['cy']          ?? 250),
-                    (float)($s['r']           ?? 30),
-                    (int)(  $s['n']           ?? 10),
-                    (float)($s['mass']        ?? 1.5),
-                    (float)($s['restitution'] ?? -1.0)
-                );
-                $shapeBlueprintIndex[$i] = $blueprintCounter++;
-                break;
-            case 'line':
-                $field->addStaticLine(
-                    (float)($s['x1']          ?? 0),
-                    (float)($s['y1']          ?? 0),
-                    (float)($s['x2']          ?? 100),
-                    (float)($s['y2']          ?? 100),
-                    (float)($s['restitution'] ?? -1.0)
-                );
-                break;
-            case 'spawn':
-                $field->setSpawnZone(
-                    (float)($s['x1'] ?? 0),   (float)($s['y1'] ?? 0),
-                    (float)($s['x2'] ?? 500), (float)($s['y2'] ?? 500)
-                );
-                break;
-            case 'joint':
-                $jointEntries[] = $s;
-                break;
-        }
-    }
-
-    // Second pass: joints reference shape indices from the array above, which
-    // must already be fully mapped before resolving (a joint can be defined
-    // before or after the shapes it connects).
-    foreach ($jointEntries as $j) {
-        $from = $j['from'] ?? [];
-        $to   = $j['to']   ?? [];
-
-        $fromShapeIdx = $from['shapeIndex'] ?? null;
-        $toShapeIdx   = $to['shapeIndex']   ?? null;
-
-        $fromBlueprintIdx = $fromShapeIdx !== null ? ($shapeBlueprintIndex[$fromShapeIdx] ?? null) : null;
-        $toBlueprintIdx   = $toShapeIdx   !== null ? ($shapeBlueprintIndex[$toShapeIdx]   ?? null) : null;
-
-        $field->addJointBlueprint(
-            $fromBlueprintIdx, (float)($from['x'] ?? 0), (float)($from['y'] ?? 0),
-            $toBlueprintIdx,   (float)($to['x']   ?? 0), (float)($to['y']   ?? 0),
-            (float)($j['rest'] ?? -1.0)
-        );
-    }
-
+    $scene = json_decode($_GET['scene'], true) ?? [];
+    $field = field::fromScene($scene);
     $field->visualize();
     exit;
 }

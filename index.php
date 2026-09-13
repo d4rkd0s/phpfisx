@@ -83,6 +83,14 @@
             border: 1px solid #333;
             border-radius: 4px;
         }
+        #live-canvas {
+            display: none;
+            position: absolute;
+            top: 0; left: 0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #fff;
+        }
         .canvas-hint {
             margin-top: 6px;
             font-size: 11px;
@@ -261,6 +269,7 @@
 
     <div class="canvas-frame">
         <canvas id="editor" width="500" height="500"></canvas>
+        <canvas id="live-canvas" width="500" height="500"></canvas>
         <iframe id="sim-iframe"></iframe>
         <div class="canvas-hint" id="hint">Drag to size · Click for default · [B/C/L/Z/V] switch tool</div>
     </div>
@@ -299,6 +308,7 @@
             <label for="trails">Motion trails</label>
         </div>
 
+        <button id="live-btn">⚡ Live</button>
         <button id="run-btn">▶ Run Simulation</button>
         <button id="back-btn">◀ Back to Editor</button>
         <p class="status" id="status">Ready</p>
@@ -357,14 +367,18 @@
     let jointDraft = null;   // { shapeIndex, x, y } — first endpoint clicked, awaiting the second
 
     // ─── Elements ───────────────────────────────────────────────────────────
-    const canvas  = document.getElementById('editor');
-    const ctx     = canvas.getContext('2d');
-    const iframe  = document.getElementById('sim-iframe');
-    const hint    = document.getElementById('hint');
-    const runBtn  = document.getElementById('run-btn');
-    const backBtn = document.getElementById('back-btn');
-    const status  = document.getElementById('status');
-    const info    = document.getElementById('shape-info');
+    const canvas     = document.getElementById('editor');
+    const ctx        = canvas.getContext('2d');
+    const iframe     = document.getElementById('sim-iframe');
+    const liveCanvas = document.getElementById('live-canvas');
+    const liveCtx    = liveCanvas.getContext('2d');
+    const hint       = document.getElementById('hint');
+    const liveBtn    = document.getElementById('live-btn');
+    const runBtn     = document.getElementById('run-btn');
+    const backBtn    = document.getElementById('back-btn');
+    const status     = document.getElementById('status');
+    const info       = document.getElementById('shape-info');
+    let   liveSource = null; // active EventSource while a Live playback is running
 
     // ─── Tool buttons ────────────────────────────────────────────────────────
     document.querySelectorAll('.tbtn[data-tool]').forEach(btn => {
@@ -739,9 +753,9 @@
         ctx.restore();
     }
 
-    // ─── Run / back ───────────────────────────────────────────────────────────
-    runBtn.addEventListener('click', () => {
-        const scene = {
+    // ─── Run / Live / back ──────────────────────────────────────────────────────
+    function buildScene() {
+        return {
             settings: {
                 points:      +document.getElementById('npoints').value,
                 steps:       +document.getElementById('nsteps').value,
@@ -755,12 +769,26 @@
                 ...(spawnZone ? [{ type:'spawn', ...spawnZone }] : []),
             ],
         };
+    }
+
+    function stopLive() {
+        if (liveSource) {
+            liveSource.close();
+            liveSource = null;
+        }
+        liveCanvas.style.display = 'none';
+    }
+
+    runBtn.addEventListener('click', () => {
+        stopLive();
+        const scene = buildScene();
 
         mode = 'run';
         canvas.style.display = 'none';
         hint.style.display   = 'none';
         iframe.style.display = 'block';
         runBtn.disabled      = true;
+        liveBtn.disabled     = true;
         backBtn.style.display= 'block';
         status.className     = 'status running';
         status.textContent   = 'Rendering…';
@@ -771,6 +799,7 @@
             document.getElementById('snd-render').currentTime = 0;
             document.getElementById('snd-done').play().catch(() => {});
             runBtn.disabled  = false;
+            liveBtn.disabled = false;
             status.className = 'status done';
             status.textContent = 'Done';
         };
@@ -778,14 +807,121 @@
         iframe.src = 'render.php?scene=' + encodeURIComponent(JSON.stringify(scene));
     });
 
+    // Live mode — streams the simulation via Server-Sent Events (live.php)
+    // and draws each incoming frame straight onto a canvas, instead of
+    // waiting for render.php to finish every step and ship one big HTML
+    // blob. render.php/the iframe stays as-is for the "generate one static
+    // playback page" use case; this is the interactive alternative.
+    liveBtn.addEventListener('click', () => {
+        stopLive();
+        const scene = buildScene();
+
+        mode = 'run';
+        canvas.style.display     = 'none';
+        hint.style.display       = 'none';
+        iframe.style.display     = 'none';
+        liveCanvas.style.display = 'block';
+        runBtn.disabled          = true;
+        liveBtn.disabled         = true;
+        backBtn.style.display    = 'block';
+        status.className         = 'status running';
+        status.textContent       = 'Streaming…';
+        document.getElementById('snd-render').play().catch(() => {});
+
+        let bounds      = { width: 500, height: 500 };
+        let staticLines = [];
+
+        liveSource = new EventSource('live.php?scene=' + encodeURIComponent(JSON.stringify(scene)));
+
+        liveSource.addEventListener('init', e => {
+            const data = JSON.parse(e.data);
+            bounds      = { width: data.width, height: data.height };
+            staticLines = data.staticLines;
+            liveCanvas.width  = bounds.width;
+            liveCanvas.height = bounds.height;
+        });
+
+        liveSource.addEventListener('step', e => {
+            drawLiveFrame(JSON.parse(e.data), bounds, staticLines);
+        });
+
+        liveSource.addEventListener('done', () => {
+            stopLive();
+            document.getElementById('snd-render').pause();
+            document.getElementById('snd-render').currentTime = 0;
+            document.getElementById('snd-done').play().catch(() => {});
+            runBtn.disabled  = false;
+            liveBtn.disabled = false;
+            status.className = 'status done';
+            status.textContent = 'Done';
+        });
+
+        liveSource.onerror = () => {
+            stopLive();
+            document.getElementById('snd-render').pause();
+            runBtn.disabled  = false;
+            liveBtn.disabled = false;
+            status.className = 'status';
+            status.textContent = 'Stream error';
+        };
+    });
+
+    function drawLiveFrame(frame, bounds, staticLines) {
+        liveCtx.fillStyle = '#fff';
+        liveCtx.fillRect(0, 0, bounds.width, bounds.height);
+
+        // Static surfaces — thick red, matching render.php's GD playback
+        liveCtx.strokeStyle = '#d23223';
+        liveCtx.lineWidth   = 3;
+        for (const [x1, y1, x2, y2] of staticLines) {
+            liveCtx.beginPath();
+            liveCtx.moveTo(x1, y1);
+            liveCtx.lineTo(x2, y2);
+            liveCtx.stroke();
+        }
+
+        // Rigid body boundary edges — blue
+        liveCtx.strokeStyle = '#1e50c8';
+        liveCtx.lineWidth   = 1;
+        for (const [ax, ay, bx, by] of frame.edges) {
+            liveCtx.beginPath();
+            liveCtx.moveTo(ax, ay);
+            liveCtx.lineTo(bx, by);
+            liveCtx.stroke();
+        }
+
+        // Joints — dashed orange line + pivot dots, matching render.php
+        liveCtx.strokeStyle = '#ff9600';
+        liveCtx.setLineDash([4, 3]);
+        for (const [ax, ay, bx, by] of frame.joints) {
+            liveCtx.beginPath();
+            liveCtx.moveTo(ax, ay);
+            liveCtx.lineTo(bx, by);
+            liveCtx.stroke();
+            dot(liveCtx, ax, ay, '#ff9600');
+            dot(liveCtx, bx, by, '#ff9600');
+        }
+        liveCtx.setLineDash([]);
+
+        // Loose/free points — black
+        liveCtx.fillStyle = '#000';
+        for (const [x, y] of frame.points) {
+            liveCtx.fillRect(x - 1, y - 1, 3, 3);
+        }
+
+        status.textContent = 'step ' + frame.step;
+    }
+
     backBtn.addEventListener('click', () => {
         mode = 'edit';
+        stopLive();
         iframe.style.display = 'none';
         iframe.src           = '';
         canvas.style.display = 'block';
         hint.style.display   = '';
         backBtn.style.display= 'none';
         runBtn.disabled      = false;
+        liveBtn.disabled     = false;
         status.className     = 'status';
         status.textContent   = 'Ready';
         document.getElementById('snd-render').pause();
